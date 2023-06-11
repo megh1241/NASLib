@@ -1,4 +1,5 @@
-cd naslib/data
+
+cd $HOME/NASLib/naslib/data
 search_space="$1"
 echo search_space = $search_space
 if [ "$search_space" = "tnb101" ] || [ "$search_space" = "all" ]

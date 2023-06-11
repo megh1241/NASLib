@@ -17,7 +17,6 @@ import torch
 import torch.nn.functional as F
 
 import copy
-
 from . import measure
 from ..p_utils import get_layer_metric_array
 
@@ -43,3 +42,5 @@ def get_grad_norm_arr(net, inputs, targets, loss_fn, split_data=1, skip_grad=Fal
         )
 
     return grad_norm_arr
+
+#Note: this is equivalent to get_grad_norm_arr =  measure(get_grad_norm_arr)

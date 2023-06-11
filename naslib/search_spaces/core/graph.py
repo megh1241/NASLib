@@ -421,11 +421,55 @@ class Graph(torch.nn.Module, nx.DiGraph):
         logger.debug("Graph {} exiting. Output {}.".format(self.name, log_formats(x)))
         return x
 
+
+    def populate_pred_config_hash(self, pred_config_graph ):
+        for node_idx in lexicographical_topological_sort(self):
+            for neigbor_idx in self.neighbors(node_idx):
+                edge_data = self.get_edge_data(node_idx, neigbor_idx)
+                if isinstance(edge_data.op, Graph):
+                    edge_data.op.populate_mktree_hash()
+                elif edge_data.op.get_embedded_ops():
+                    for primitive in edge_data.op.get_embedded_ops():
+                        if isinstance(primitive, Graph):
+                            primitive.populate_mktree_hash()
+                
+                #TODO : layer_config some function of edge_data.op
+                pred_config_graph[(node_idx, neigbor_idx)] = str(edge_data.op).encode()
+                
+
+    def populate_mktree(self, pred_config_graph):
+        hashed_names = collections.defaultdict(str)
+        counts = collections.defaultdict(int) 
+        layer_hash = {}
+        for (u, v) in pred_config_graph:
+            layer_hash[(u,v)] = hashlib.sha3_512()
+            layer_hash[(u,v)].update(pred_config_graph[u,v])
+        
+        topological_sorted_idx = lexicographical_topological_sort(self)
+        num_top_nodes = len(topological_sorted_idx)
+        for i in range(num_top_nodes):
+            for j in range(0, i):
+                u = topological_sorted_idx[j]
+                v = topological_sorted_idx[i]
+                for k in range(0, j):
+                    for l in range(0, k):
+                        s = topological_sorted_idx[k]
+                        t = topological_sorted_idx[l]
+                        if  v==s and u!=t :
+                            layer_hash[(u,v)].update(hashed_names[(s,t)].encode())
+                layer_hash[(u,v)] = layer_hash[(u,v)].hexdigest()
+                hashed_names[(u,v)] = layer_hash[(u,v)] + "_" + str(counts[layer_hash[(u,v)]])
+                counts[layer_hash[(u,v)]] += 1
+
+        return layer_hash
+
+
     def parse(self):
         """
         Convert the graph into a neural network which can then
         be optimized by pytorch.
         """
+        #self.populate_mktree_hash(pred_graph, layer_hash_dict)
         for node_idx in lexicographical_topological_sort(self):
             if "subgraph" in self.nodes[node_idx]:
                 self.nodes[node_idx]["subgraph"].parse()
@@ -452,6 +496,70 @@ class Graph(torch.nn.Module, nx.DiGraph):
                     edge_data.op,
                 )
         self.is_parsed = True
+
+   
+    def __name_from_config(self, config, u, v):
+        return str(config) + '&' + str(u) + '*' +str(v)
+
+
+    def parse_datastates(self, counts, pred_graph, hashed_names, layer_hash_map):
+        """
+        Convert the graph into a neural network which can then
+        be optimized by pytorch.
+        """
+        #self.populate_mktree_hash(pred_graph, layer_hash_dict)
+        for node_idx in lexicographical_topological_sort(self):
+            if "subgraph" in self.nodes[node_idx]:
+                self.nodes[node_idx]["subgraph"].parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+                self.add_module(
+                    "{}-subgraph_at({})".format(self.name, node_idx),
+                    self.nodes[node_idx]["subgraph"],
+                )
+            else:
+                if isinstance(self.nodes[node_idx]["comb_op"], torch.nn.Module):
+                    self.add_module(
+                        "{}-comb_op_at({})".format(self.name, node_idx),
+                        self.nodes[node_idx]["comb_op"],
+                    )
+            if node_idx in pred_graph:
+                for pred_idx in pred_graph[node_idx]:
+                    pred_edge_data = self.get_edge_data(pred_idx, node_idx)
+                    pred_name = __name_from_config(pred_edge_data.op, pred_idx, node_idx)
+                    layer_hash[pred_name] = layer_hash[pred_name].hexdigest()
+                    base_name = layer_hash[pred_name]
+                    hashed_names[pred_name] = base_name + "_" + str(counts[base_name])
+                    counts[base_name] += 1
+                    self.add_module(hashed_names[pred_name], pred_idx, node_idx, pred_edge_data.op)  
+                   #self.add_module(
+                   #     "{}-edge({},{})".format(self.name, node_idx, neigbor_idx),
+                   #     edge_data.op,
+                   # )
+            
+            for neigbor_idx in self.neighbors(node_idx):
+                pred_graph[neigbor_idx].append(node_idx)
+                edge_data = self.get_edge_data(node_idx, neigbor_idx)
+                if isinstance(edge_data.op, Graph):
+                    edge_data.op.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+                elif edge_data.op.get_embedded_ops():
+                    for primitive in edge_data.op.get_embedded_ops():
+                        if isinstance(primitive, Graph):
+                            primitive.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+
+                raw_config = str(edge_data.op)
+                config_numbered = __name_from_config(edge_data.op, node_idx, neigbor_idx)
+                if config_numbered not in layer_hash:
+                    layer_hash[config_numbered] = hashlib.sha3_512()
+                    layer_hash[config_numbered].update(raw_config.encode())
+               
+                if node_idx in pred_graph:
+                    for pred_idx in pred_graph[node_idx]:
+                        pred_edge_data = self.get_edge_data(pred_idx, node_idx)
+                        pred_name = __name_from_config(pred_edge_data.op, pred_idx, node_idx)
+                        layer_hash[config_numbered].update(hashed_names[pred_name].encode())
+            
+            
+        self.is_parsed = True
+    
 
     def unparse(self):
         """

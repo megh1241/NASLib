@@ -5,10 +5,10 @@ cutout_length: 16
 cutout_prob: 1.0
 dataset: cifar10
 out_dir: run
-predictor: fisher
+predictor: snip
 search_space: nasbench101 #nasbench201 #nasbench301
 seed: 0
-test_size: 200
+test_size: 1000
 train_size: 400
 zc_ensemble: true
 zc_only: true

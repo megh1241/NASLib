@@ -25,7 +25,7 @@ dataset_api = get_dataset_api(config.search_space, config.dataset)
 
 if config.dataset in ['ninapro', 'svhn', 'scifar100']:
     postfix = '9x'
-    with open(f'./naslib/data/9x/{config.search_space}/{config.dataset}/test.json') as f:
+    with open(f'/home/ubuntu/NASLib/naslib/data/9x/{config.search_space}/{config.dataset}/test.json') as f:
         api9x_data = json.load(f)
     api9x = {translate_str(str(record['arch'])): record['accuracy'] for record in api9x_data}
 else:

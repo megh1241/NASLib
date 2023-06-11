@@ -20,6 +20,7 @@ class ZeroCost(Predictor):
         torch.backends.cudnn.benchmark = False
 
         self.method_type = method_type
+        print("method type: ", method_type)
         self.dataload = "random"
         self.num_imgs_or_batches = 1
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

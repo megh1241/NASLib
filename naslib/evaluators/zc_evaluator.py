@@ -1,3 +1,4 @@
+print('import a')
 import codecs
 import time
 import json
@@ -7,12 +8,20 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import copy
+print('import a')
 import torch.nn as nn
+print('import b')
 
 from naslib.search_spaces.core.query_metrics import Metric
+print('import c')
 from naslib import utils
+print('import d')
 
 logger = logging.getLogger(__name__)
+
+#import pdb; pdb.set_trace()
+
+print('import e')
 
 
 class ZeroCostPredictorEvaluator(object):
@@ -21,6 +30,7 @@ class ZeroCostPredictorEvaluator(object):
     """
 
     def __init__(self, predictor, zc_api=None, use_zc_api=None, config=None, log_results=True):
+        print('import f')
         self.predictor = predictor
         self.config = config
         self.test_size = config.test_size
@@ -110,19 +120,24 @@ class ZeroCostPredictorEvaluator(object):
         ydata = []
         info = []
         train_times = []
-        while len(xdata) < data_size:
+        xdata_len=0
+        while xdata_len < data_size:
             arch = self.search_space.clone()
             arch.sample_random_architecture(dataset_api=self.dataset_api, load_labeled=True)
                 
             arch_hash = arch.get_hash()
             if self.use_zc_api and str(arch_hash) in self.zc_api:
+                print("if2")
                 accuracy = self.zc_api[str(arch_hash)]['val_accuracy']
             else:
+                print("else2")
                 accuracy = arch.query(self.metric,self.dataset, dataset_api=self.dataset_api)
             # accuracy, train_time, info_dict = self.get_full_arch_info(graph)
 
             xdata.append(arch_hash)
             ydata.append(accuracy)
+            xdata_len+=1
+            print(xdata_len, flush=True)
             # info.append(info_dict)
             # train_times.append(train_time)
 
@@ -142,7 +157,9 @@ class ZeroCostPredictorEvaluator(object):
 
         # Iterate over the architectures, instantiate a graph with each architecture
         # and then query the predictor for the performance of that
-        for arch_hash in xtest:
+        total_iters = len(xtest)
+        for iter1, arch_hash in enumerate(xtest):
+            time1 = time.time()
             if self.use_zc_api and str(arch_hash) in self.zc_api:
                 pred = zc_api[str(arch_hash)][self.predictor.method_type]['score']
             else:
@@ -158,7 +175,9 @@ class ZeroCostPredictorEvaluator(object):
                 pred = 1e9
 
             test_pred.append(pred)
-
+            time2 = time.time()
+            print("iter ", iter1,  " out of ", total_iters, flush=True)
+            print("Elapsed time: ", time2 - time1 )
         test_pred = np.array(test_pred)
         query_time_end = time.time()
 
@@ -207,6 +226,7 @@ class ZeroCostPredictorEvaluator(object):
         self.single_evaluate(test_data, zc_api)
 
         if self.log_results_to_json:
+            logger.info('logging results to json')
             self._log_to_json()
 
         return self.results

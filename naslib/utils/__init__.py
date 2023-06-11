@@ -140,8 +140,9 @@ def pairwise(iterable):
 
 def load_config(path):
     with open(path) as f:
+        print('loading config')
         config = CfgNode.load_cfg(f)
-
+        print (config)
     return config
 
 
@@ -190,8 +191,10 @@ def get_config_from_args(args=None, config_type="nas"):
     logger.info("Command line args: {}".format(args))
 
     if args.config_file is None:
+        print("IF")
         config = load_default_config(config_type=config_type)
     else:
+        print("ELSE")
         config = load_config(path=args.config_file)
 
     # Override file args with ones from command line

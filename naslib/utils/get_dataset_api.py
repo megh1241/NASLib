@@ -27,7 +27,8 @@ def get_zc_benchmark_api(search_space, dataset):
     return data[dataset]
 
 def load_sampled_architectures(search_space, postfix=''):
-    datafile_path = os.path.join(get_project_root(), "data", "archs", f"archs_{search_space}{postfix}.json")
+    datafile_path = os.path.join(get_project_root(), "data",  f"archs_{search_space}{postfix}.json")
+    #datafile_path = os.path.join(get_project_root(), "data", "archs", f"archs_{search_space}{postfix}.json")
     with open(datafile_path) as f:
         data = json.load(f)
 
@@ -48,8 +49,9 @@ def get_nasbench101_api(dataset=None):
     # load nasbench101
     import naslib.utils.nb101_api as api
 
-    nb101_datapath = os.path.join(
-        get_project_root(), "data", "nasbench_only108.pkl")
+    #nb101_datapath = os.path.join(
+    #    get_project_root(), "naslib/data", "nasbench_only108.pkl")
+    nb101_datapath =  '/home/ubuntu/NASLib/naslib/data/nasbench_only108.pkl'
     assert os.path.exists(nb101_datapath), f"Could not find {nb101_datapath}. Please download nasbench_only108.pk \
 from https://drive.google.com/drive/folders/1rwmkqyij3I24zn5GSO6fGv2mzdEfPIEa"
 

@@ -48,6 +48,7 @@ def find_measures_arrays(
     if measure_names is None:
         measure_names = measures.available_measures
 
+    print(',easure: nammes: ', measure_names)
     dataload, num_imgs_or_batches, num_classes = dataload_info
 
     if not hasattr(net_orig, "get_prunable_copy"):
@@ -80,6 +81,7 @@ def find_measures_arrays(
         try:
             for measure_name in measure_names:
                 if measure_name not in measure_values:
+                    print('measure name calc measure: ', measure_name)
                     val = measures.calc_measure(
                         measure_name,
                         net_orig,
@@ -107,7 +109,7 @@ def find_measures_arrays(
             else:
                 raise e
 
-    net_orig = net_orig.to(device).train()
+    #net_orig = net_orig.to(device).train()
     return measure_values
 
 
@@ -125,7 +127,7 @@ def find_measures(
     # and some information about the input data (dataloader)
     # and loss function (loss_fn)
     # this function returns an array of zero-cost proxy metrics.
-
+    print("insiode get_measures arra")
     def sum_arr(arr):
         sum = 0.0
         for i in range(len(arr)):
