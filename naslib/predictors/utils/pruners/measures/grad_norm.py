@@ -22,7 +22,7 @@ from ..p_utils import get_layer_metric_array
 
 
 @measure("grad_norm", bn=True)
-def get_grad_norm_arr(net, inputs, targets, loss_fn, split_data=1, skip_grad=False):
+def get_grad_norm_arr(net, inputs, targets, loss_fn, split_data=1, skip_grad=False, transfer_method=None):
     net.zero_grad()
     N = inputs.shape[0]
     for sp in range(split_data):

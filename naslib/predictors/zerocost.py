@@ -25,7 +25,7 @@ class ZeroCost(Predictor):
         self.num_imgs_or_batches = 1
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    def query(self, graph, dataloader=None, info=None):
+    def query(self, graph, dataloader=None, info=None, transfer_method=None):
         loss_fn = graph.get_loss_fn()
 
         n_classes = graph.num_classes
@@ -36,6 +36,7 @@ class ZeroCost(Predictor):
                 device=self.device,
                 loss_fn=loss_fn,
                 measure_names=[self.method_type],
+                transfer_method=transfer_method
             )
 
         if math.isnan(score) or math.isinf(score):

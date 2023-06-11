@@ -42,7 +42,8 @@ def snip_forward_linear(self, x):
 
 
 @measure("snip", bn=True, mode="param")
-def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1):
+def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, transfer_method=None):
+    #TODO: transfer weights here
     for layer in net.modules():
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
             layer.weight_mask = nn.Parameter(torch.ones_like(layer.weight))
@@ -65,6 +66,7 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1):
         outputs = net.forward(inputs[st:en])
         loss = loss_fn(outputs, targets[st:en])
         loss.backward()
+    #TODO: store weights here
 
     # select the gradients that we want to use for search/prune
     def snip(layer):

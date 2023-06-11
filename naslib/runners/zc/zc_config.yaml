@@ -6,10 +6,10 @@ cutout_prob: 1.0
 dataset: cifar10
 out_dir: run
 predictor: snip
-search_space: nasbench101 #nasbench201 #nasbench301
+search_space: nasbench201 #nasbench101 #nasbench301
 seed: 0
-test_size: 1000
-train_size: 400
+test_size: 20
+train_size: 20
 zc_ensemble: true
 zc_only: true
 zc_names:

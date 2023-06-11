@@ -1,6 +1,7 @@
-print('import a')
 import codecs
+import collections
 import time
+import hashlib
 import json
 import logging
 import os
@@ -8,20 +9,16 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import copy
-print('import a')
 import torch.nn as nn
-print('import b')
+
 
 from naslib.search_spaces.core.query_metrics import Metric
-print('import c')
 from naslib import utils
-print('import d')
 
 logger = logging.getLogger(__name__)
 
 #import pdb; pdb.set_trace()
 
-print('import e')
 
 
 class ZeroCostPredictorEvaluator(object):
@@ -30,7 +27,6 @@ class ZeroCostPredictorEvaluator(object):
     """
 
     def __init__(self, predictor, zc_api=None, use_zc_api=None, config=None, log_results=True):
-        print('import f')
         self.predictor = predictor
         self.config = config
         self.test_size = config.test_size
@@ -127,10 +123,8 @@ class ZeroCostPredictorEvaluator(object):
                 
             arch_hash = arch.get_hash()
             if self.use_zc_api and str(arch_hash) in self.zc_api:
-                print("if2")
                 accuracy = self.zc_api[str(arch_hash)]['val_accuracy']
             else:
-                print("else2")
                 accuracy = arch.query(self.metric,self.dataset, dataset_api=self.dataset_api)
             # accuracy, train_time, info_dict = self.get_full_arch_info(graph)
 
@@ -143,7 +137,7 @@ class ZeroCostPredictorEvaluator(object):
 
         return [xdata, ydata, info, train_times]
 
-    def single_evaluate(self, test_data, zc_api):
+    def single_evaluate(self, test_data, zc_api, transfer_method=None):
         """
         Evaluate the predictor.
         """
@@ -165,9 +159,15 @@ class ZeroCostPredictorEvaluator(object):
             else:
                 arch = self.search_space.clone()
                 arch.set_spec(arch_hash, self.dataset_api)
-                arch.parse()
+                counts = collections.defaultdict(int)
+                pred_graph = collections.defaultdict(list)
+                hashed_names = collections.defaultdict(str) 
+                layer_hash_map = collections.defaultdict(None) 
+                print('before parse datastates', flush=True)
+                arch.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+                print('after parse datastates', flush=True)
                 self.predictor.train_loader = copy.deepcopy(self.train_loader)
-                pred = self.predictor.query(arch, dataloader=self.predictor.train_loader)
+                pred = self.predictor.query(arch, dataloader=self.predictor.train_loader, transfer_method=transfer_method)
             
             if float("-inf") == pred:
                 pred = -1e9
@@ -220,10 +220,10 @@ class ZeroCostPredictorEvaluator(object):
 
         return test_data
 
-    def evaluate(self, zc_api):
+    def evaluate(self, zc_api, transfer_method):
         self.predictor.pre_process()
         test_data = self.load_test_data()
-        self.single_evaluate(test_data, zc_api)
+        self.single_evaluate(test_data, zc_api, transfer_method)
 
         if self.log_results_to_json:
             logger.info('logging results to json')
