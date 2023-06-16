@@ -44,7 +44,9 @@ def find_measures_arrays(
     device,
     measure_names=None,
     loss_fn=F.cross_entropy,
-    transfer_method=None
+    transfer_method=None,
+    name_hash=None,
+    pred_graph=None
 ):
     if measure_names is None:
         measure_names = measures.available_measures
@@ -91,7 +93,9 @@ def find_measures_arrays(
                         targets,
                         loss_fn=loss_fn,
                         split_data=ds,
-                        transfer_method=transfer_method
+                        transfer_method=transfer_method,
+                        name_hash=name_hash,
+                        pred_graph=pred_graph
                     )
                     measure_values[measure_name] = val
 
@@ -123,7 +127,9 @@ def find_measures(
     loss_fn,  # loss function to use within the zero-cost metrics
     measure_names=None,  # an array of measure names to compute, if left blank, all measures are computed by default
     measures_arr=None,
-    transfer_method=None
+    transfer_method=None,
+    name_hash=None,
+    pred_graph=None
 ):
 
     # Given a neural net
@@ -163,7 +169,9 @@ def find_measures(
             device,
             loss_fn=loss_fn,
             measure_names=measure_names,
-            transfer_method=transfer_method
+            transfer_method=transfer_method,
+            name_hash=name_hash,
+            pred_graph=pred_graph
         )
 
     for k, v in measures_arr.items():

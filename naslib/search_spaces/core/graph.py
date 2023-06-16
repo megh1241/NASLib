@@ -2,6 +2,7 @@ import networkx as nx
 import copy
 import hashlib
 import logging
+import collections
 import torch
 import random
 import inspect
@@ -423,6 +424,18 @@ class Graph(torch.nn.Module, nx.DiGraph):
         return x
 
 
+    def child_parse(self, graph, nx_digraph, parent_name):
+        out_nodes = []
+        for node_idx in lexicographical_topological_sort(graph):
+            for neigbor_idx in graph.neighbors(node_idx):
+                name =  parent_name + ".{}-edge({},{})".format(graph.name, node_idx, neigbor_idx)
+                out_nodes.append(name)
+                for second_hop_neigbor_idx in graph.neighbors(neigbor_idx):
+                    name2 =  parent_name + ".{}-edge({},{})".format(graph.name, neigbor_idx, second_hop_neigbor_idx)
+                    nx_digraph.add_edge(name, name2)
+                    out_nodes.append(name2)
+        return out_nodes
+
     def parse(self):
         """
         Convert the graph into a neural network which can then
@@ -455,32 +468,76 @@ class Graph(torch.nn.Module, nx.DiGraph):
                 )
         self.is_parsed = True
 
+    def flatten_and_parse(self):
+        """
+        Convert the graph into a neural network which can then
+        be optimized by pytorch.
+        """
+        nx_digraph = nx.DiGraph()
+        predecessor_nodes = collections.defaultdict(list)
+        for node_idx in lexicographical_topological_sort(self):
+            for neigbor_idx in self.neighbors(node_idx):
+                edge_data = self.get_edge_data(node_idx, neigbor_idx)
+                out_nodes = []
+                if isinstance(edge_data.op, Graph):
+                    out_nodes = self.child_parse(edge_data.op, 
+                                            nx_digraph, 
+                                            "{}-edge({},{})".format(self.name, node_idx, neigbor_idx)
+                                            )
+                elif edge_data.op.get_embedded_ops():
+                    for primitive in edge_data.op.get_embedded_ops():
+                        print(primitive)
+                        if isinstance(primitive, Graph):
+                            out_nodes_temp = self.child_parse(primitive, 
+                                            nx_digraph, 
+                                            "{}-edge({},{})".format(self.name, node_idx, neigbor_idx)
+                                            )
+                            out_nodes.extend(out_nodes_temp)
+                
+                out_nodes.extend(["{}-edge({},{})".format(self.name, node_idx, neigbor_idx)])
+
+
+                if node_idx in predecessor_nodes:
+                    for pred in predecessor_nodes[node_idx]:
+                        #TODO: add edge b/w pred and all of outnodes
+                        for out_node in out_nodes:
+                            nx_digraph.add_edge(pred, out_node)      
+                
+                predecessor_nodes[neigbor_idx].extend(copy.deepcopy(out_nodes))
+                
+        self.is_parsed = True
+        return nx_digraph
    
+    '''
     def __name_from_config(self, config, u, v):
-        return str(config) + '&' + str(u) + '*' +str(v)
+        return str(config) + '&' + str(u) + '*' +str(v) + '$' + self.name
 
 
-    def parse_datastates(self, counts, pred_graph, hashed_names, layer_hash_map):
+    def parse_datastates(self, counts, pred_graph, hashed_names, layer_hash_map, pred_op_graph, pred_op_hash):
         """
         Convert the graph into a neural network which can then
         be optimized by pytorch.
         """
         for node_idx in lexicographical_topological_sort(self):
             if "subgraph" in self.nodes[node_idx]:
-                self.nodes[node_idx]["subgraph"].parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+                print('SUBGRAPH IN!!\n', flush=True)
+                self.nodes[node_idx]["subgraph"].parse_datastates(counts, pred_graph, hashed_names, layer_hash_map, pred_op_graph, pred_op_hash)
                 self.add_module(
                     "{}-subgraph_at({})".format(self.name, node_idx),
                     self.nodes[node_idx]["subgraph"],
                 )
             else:
+                print('COMB IN!!\n', flush=True)
                 if isinstance(self.nodes[node_idx]["comb_op"], torch.nn.Module):
                     self.add_module(
                         "{}-comb_op_at({})".format(self.name, node_idx),
                         self.nodes[node_idx]["comb_op"],
                     )
+            predecessor_nodes = []
             if node_idx in pred_graph:
                 for pred_idx in pred_graph[node_idx]:
                     pred_edge_data = self.get_edge_data(pred_idx, node_idx)
+                    predecessor_nodes.append((pred_idx, node_idx)) 
                     if pred_edge_data is None:
                         continue
                     pred_name = self.__name_from_config(pred_edge_data.op, pred_idx, node_idx)
@@ -494,23 +551,24 @@ class Graph(torch.nn.Module, nx.DiGraph):
                         base_name = layer_hash_map[pred_name]
                         hashed_names[pred_name] = base_name + "_" + str(counts[base_name])
                         counts[base_name] += 1
+                        pred_op_hash[(pred_idx, node_idx)] = hashed_names[pred_name]
                         self.add_module(hashed_names[pred_name], pred_edge_data.op)  
-    
+
             for neigbor_idx in self.neighbors(node_idx):
                 edge_data = self.get_edge_data(node_idx, neigbor_idx)
                 if isinstance(edge_data.op, Graph):
-                    edge_data.op.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
+                    edge_data.op.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map, pred_op_graph, pred_op_hash)
                 elif edge_data.op.get_embedded_ops():
                     for primitive in edge_data.op.get_embedded_ops():
                         if isinstance(primitive, Graph):
-                            primitive.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
-                
+                            primitive.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map, pred_op_graph, pred_op_hash)
+               
+                pred_op_graph[(node_idx, neigbor_idx)].extend([n_ele for n_ele in predecessor_nodes])
                 pred_graph[neigbor_idx].append(node_idx)
                 raw_config = str(edge_data.op)
                 config_numbered = self.__name_from_config(edge_data.op, node_idx, neigbor_idx)
                 if config_numbered not in layer_hash_map:
                     layer_hash_map[config_numbered] = hashlib.sha3_512()
-               
               
                 l = layer_hash_map[config_numbered]
                 if isinstance(l, str):
@@ -531,6 +589,7 @@ class Graph(torch.nn.Module, nx.DiGraph):
                             layer_hash_map[config_numbered].update(hashed_names[pred_name].encode())
         
         self.is_parsed = True
+    '''
     
 
     def unparse(self):

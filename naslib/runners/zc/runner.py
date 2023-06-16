@@ -34,7 +34,6 @@ my_transfer_method = transfer_method_cls(
 # amongst others.
 
 config = utils.get_config_from_args(config_type="zc")
-print('save directory: ', config.save)
 utils.set_seed(config.seed)
 logger = setup_logger(config.save + "/log.log")
 logger.setLevel(logging.INFO)
@@ -44,8 +43,6 @@ utils.log_args(config)
 # dataset_api = None
 dataset_api = get_dataset_api(config.search_space, config.dataset)
 zc_api = get_zc_benchmark_api(config.search_space, config.dataset)
-print('search space: ', config.search_space)
-print('data set: ', config.dataset)
 # Initialize the search space and predictor
 # Method type can be "fisher", "grasp", "grad_norm", "jacov", "snip", "synflow", "flops", "params", "nwot", "zen", "plain", "l2_norm" or "epe_nas"
 predictor = ZeroCost(method_type=config.predictor)

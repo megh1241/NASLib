@@ -20,12 +20,11 @@ class ZeroCost(Predictor):
         torch.backends.cudnn.benchmark = False
 
         self.method_type = method_type
-        print("method type: ", method_type)
         self.dataload = "random"
         self.num_imgs_or_batches = 1
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    def query(self, graph, dataloader=None, info=None, transfer_method=None):
+    def query(self, graph, dataloader=None, info=None, transfer_method=None, name_hash=None, pred_graph=None):
         loss_fn = graph.get_loss_fn()
 
         n_classes = graph.num_classes
@@ -36,7 +35,9 @@ class ZeroCost(Predictor):
                 device=self.device,
                 loss_fn=loss_fn,
                 measure_names=[self.method_type],
-                transfer_method=transfer_method
+                transfer_method=transfer_method,
+                name_hash=name_hash,
+                pred_graph=pred_graph
             )
 
         if math.isnan(score) or math.isinf(score):

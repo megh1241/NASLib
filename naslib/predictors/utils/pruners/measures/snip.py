@@ -20,6 +20,7 @@ import torch.nn.functional as F
 
 import copy
 import types
+import uuid
 
 from . import measure
 from ..p_utils import get_layer_metric_array
@@ -42,8 +43,12 @@ def snip_forward_linear(self, x):
 
 
 @measure("snip", bn=True, mode="param")
-def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, transfer_method=None):
+def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, pred_graph=None, name_hash=None, transfer_method=None):
     #TODO: transfer weights here
+    
+
+    model_id = int(uuid.uuid4().int>>64)
+
     for layer in net.modules():
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
             layer.weight_mask = nn.Parameter(torch.ones_like(layer.weight))
@@ -66,8 +71,13 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, t
         outputs = net.forward(inputs[st:en])
         loss = loss_fn(outputs, targets[st:en])
         loss.backward()
-    #TODO: store weights here
 
+    #transferred, parent_id = transfer_method.transfer(
+    #                net, id=model_id, name_hash=name_hash,pred_graph=pred_graph, hint=None
+    #            )
+    #print("after transfer", flush=True)
+    #print("Number of layers transferred: ", len(transferred), flush=True)
+    #TODO: change the zero to actual accuracy    
     # select the gradients that we want to use for search/prune
     def snip(layer):
         if layer.weight_mask.grad is not None:
@@ -76,5 +86,18 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, t
             return torch.zeros_like(layer.weight)
 
     grads_abs = get_layer_metric_array(net, snip, mode)
+    
+    sum1 = 0.0
+    for i in range(len(grads_abs)):
+        sum1 += torch.sum(grads_abs[i])
+    sum1  = sum1.item()
+
+
+
+
+    print('val acc: ', sum1, flush=True)
+    print("before store", flush=True)
+    #transfer_method.store(id=model_id, model=net, name_hash=name_hash, pred_graph=pred_graph, prefix=transferred, val_acc=sum1)
+    print("after store", flush=True)
 
     return grads_abs

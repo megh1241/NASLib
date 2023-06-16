@@ -100,6 +100,19 @@ class ZeroCostPredictorEvaluator(object):
         return [xdata, ydata, None, None]
 
 
+    def process_pred_graph(self, hashed_names, digraph):
+        new_graph = {}
+        for node in digraph.nodes:
+            if hashed_names[node] not in new_graph:
+                new_graph[hashed_names[node]] = []
+            neighbors = list(digraph.predecessors(node))
+            new_graph[hashed_names[node]].extend(list(set([hashed_names[i] for i in neighbors])))
+        
+
+
+        return new_graph
+
+
     def load_dataset(self, load_labeled=False, data_size=10):
         """
         There are two ways to load an architecture.
@@ -137,6 +150,30 @@ class ZeroCostPredictorEvaluator(object):
 
         return [xdata, ydata, info, train_times]
 
+
+    def remove_suffix(self, string):
+        split_string = string.split('.')
+        if 'cell' in string:
+            return '.'.join([split_string[0] , split_string[1]])
+        return split_string[0]
+
+    def get_hashed_names(self, graph, arch):
+        hashed_names = collections.defaultdict(str)
+        counts = collections.defaultdict(int)
+        for name, module in arch.named_modules():
+            if name == '':
+                continue
+            layer_hash = hashlib.sha3_512()
+            layer_hash.update(str(module).encode())
+            name_without_suffix = self.remove_suffix(name)
+            for pred_name in graph.predecessors(name_without_suffix):
+                layer_hash.update(hashed_names[pred_name].encode())
+            layer_hash = layer_hash.hexdigest()
+            base_name = layer_hash + str(module)
+            hashed_names[name_without_suffix] = base_name + "_" + str(counts[base_name])
+            counts[base_name] += 1
+        return hashed_names
+
     def single_evaluate(self, test_data, zc_api, transfer_method=None):
         """
         Evaluate the predictor.
@@ -159,16 +196,19 @@ class ZeroCostPredictorEvaluator(object):
             else:
                 arch = self.search_space.clone()
                 arch.set_spec(arch_hash, self.dataset_api)
-                counts = collections.defaultdict(int)
-                pred_graph = collections.defaultdict(list)
-                hashed_names = collections.defaultdict(str) 
-                layer_hash_map = collections.defaultdict(None) 
-                print('before parse datastates', flush=True)
-                arch.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map)
-                print('after parse datastates', flush=True)
+                arch.parse()
+                
+                digraph = arch.flatten_and_parse()
+                #print("Printing PARAMS!!! ")
+                #for name, param in arch.named_parameters():
+                #    print(name, flush=True)
+                #print("************************************")
+
+                #print(digraph.edges)
                 self.predictor.train_loader = copy.deepcopy(self.train_loader)
-                pred = self.predictor.query(arch, dataloader=self.predictor.train_loader, transfer_method=transfer_method)
-            
+                hashed_names = self.get_hashed_names(digraph, arch) 
+                pred_graph_processed = self.process_pred_graph(hashed_names, digraph)
+                pred = self.predictor.query(arch, dataloader=self.predictor.train_loader, pred_graph=pred_graph_processed, name_hash = hashed_names, transfer_method=transfer_method)
             if float("-inf") == pred:
                 pred = -1e9
             elif float("inf") == pred:

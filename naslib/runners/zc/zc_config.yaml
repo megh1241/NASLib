@@ -8,7 +8,7 @@ out_dir: run
 predictor: snip
 search_space: nasbench201 #nasbench101 #nasbench301
 seed: 0
-test_size: 20
+test_size: 400
 train_size: 20
 zc_ensemble: true
 zc_only: true
