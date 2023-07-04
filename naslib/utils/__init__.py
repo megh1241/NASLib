@@ -90,6 +90,10 @@ def default_argument_parser():
         help="number of nodes for distributed training",
     )
     parser.add_argument(
+        "--transfer_weights",
+        action="store_true"
+    )
+    parser.add_argument(
         "--rank", default=0, type=int, help="node rank for distributed training"
     )
     parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
@@ -196,7 +200,7 @@ def get_config_from_args(args=None, config_type="nas"):
     else:
         print("ELSE")
         config = load_config(path=args.config_file)
-
+    
     # Override file args with ones from command line
     try:
         for arg, value in pairwise(args.opts):
@@ -210,6 +214,7 @@ def get_config_from_args(args=None, config_type="nas"):
         config.eval_only = args.eval_only
         config.resume = args.resume
         config.model_path = args.model_path
+        config.transfer_weights = args.transfer_weights
 
         # load config file
         config.set_new_allowed(True)

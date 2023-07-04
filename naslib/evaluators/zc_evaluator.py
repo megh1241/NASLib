@@ -197,18 +197,21 @@ class ZeroCostPredictorEvaluator(object):
                 arch = self.search_space.clone()
                 arch.set_spec(arch_hash, self.dataset_api)
                 arch.parse()
-                
                 digraph = arch.flatten_and_parse()
-                #print("Printing PARAMS!!! ")
-                #for name, param in arch.named_parameters():
-                #    print(name, flush=True)
-                #print("************************************")
-
-                #print(digraph.edges)
                 self.predictor.train_loader = copy.deepcopy(self.train_loader)
-                hashed_names = self.get_hashed_names(digraph, arch) 
-                pred_graph_processed = self.process_pred_graph(hashed_names, digraph)
-                pred = self.predictor.query(arch, dataloader=self.predictor.train_loader, pred_graph=pred_graph_processed, name_hash = hashed_names, transfer_method=transfer_method)
+                if self.config.transfer_weights:
+                    hashed_names = self.get_hashed_names(digraph, arch) 
+                    pred_graph_processed = self.process_pred_graph(hashed_names, digraph)
+                    pred = self.predictor.query(
+                                                arch, 
+                                                dataloader=self.predictor.train_loader, 
+                                                pred_graph=pred_graph_processed, 
+                                                name_hash=hashed_names, 
+                                                transfer_method=transfer_method
+                                                )
+                else:
+                    pred = self.predictor.query(arch, dataloader=self.predictor.train_loader)
+
             if float("-inf") == pred:
                 pred = -1e9
             elif float("inf") == pred:

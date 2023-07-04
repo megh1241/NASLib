@@ -1,11 +1,11 @@
-batch_size: 32
+batch_size: 128
 config_type: zc_example
 cutout: false
 cutout_length: 16
 cutout_prob: 1.0
 dataset: cifar10
 out_dir: run
-predictor: snip
+predictor: jacov
 search_space: nasbench201 #nasbench101 #nasbench301
 seed: 0
 test_size: 400

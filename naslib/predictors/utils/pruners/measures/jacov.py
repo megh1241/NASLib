@@ -22,21 +22,43 @@ better.
 Author: Robin Ru @ University of Oxford
 """
 
+import uuid
 import torch
 import numpy as np
 
 from . import measure
 
 
-def get_batch_jacobian(net, x, target):
+def get_batch_jacobian(net, x, target, pred_graph=None, name_hash=None, transfer_method=None):
     net.zero_grad()
 
+    model_id = int(uuid.uuid4().int>>64)
+    if transfer_method:
+        transferred, parent_id = transfer_method.transfer(
+            net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
+        )
+        print("transferred: ", end='', flush=True)
+        print(len(transferred), flush=True)
+   
     x.requires_grad_(True)
-
     y = net(x)
-
     y.backward(torch.ones_like(y))
     jacob = x.grad.detach()
+
+    jacobs = jacob.reshape(jacob.size(0), -1).cpu().numpy()
+    jc = eval_score(jacobs, target.detach())
+    if transfer_method:
+        if name_hash==None or pred_graph==None:
+            print("None alert!")
+        print('jc: ', jc, flush=True)
+        transfer_method.store(
+                              id=model_id,
+                              model=net,
+                              name_hash=name_hash,
+                              pred_graph=pred_graph,
+                              prefix=transferred,
+                              val_acc=-1*jc
+                              )
 
     return jacob, target.detach()
 
@@ -49,10 +71,10 @@ def eval_score(jacob, labels=None):
 
 
 @measure("jacov", bn=True)
-def compute_jacob_cov(net, inputs, targets, split_data=1, loss_fn=None):
+def compute_jacob_cov(net, inputs, targets, split_data=1, loss_fn=None, pred_graph=None, name_hash=None, transfer_method=None):
     try:
         # Compute gradients (but don't apply them)
-        jacobs, labels = get_batch_jacobian(net, inputs, targets)
+        jacobs, labels = get_batch_jacobian(net, inputs, targets, pred_graph=pred_graph, name_hash=name_hash, transfer_method=transfer_method)
         jacobs = jacobs.reshape(jacobs.size(0), -1).cpu().numpy()
         jc = eval_score(jacobs, labels)
     except Exception as e:

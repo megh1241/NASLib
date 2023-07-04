@@ -10,5 +10,6 @@ if [[ $OMPI_COMM_WORLD_RANK -ge 1 ]]; then
                 --storage_backend "map" \
                 --ds_colocated 0
 else
-	python3 naslib/runners/zc/runner.py --config-file $CONFIG_FILE_PATH 
+	python3 naslib/runners/zc/runner.py --config-file $CONFIG_FILE_PATH --transfer_weights 
+	#python3 naslib/runners/zc/runner.py --config-file $CONFIG_FILE_PATH
 fi
