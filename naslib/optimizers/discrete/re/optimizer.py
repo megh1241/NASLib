@@ -44,8 +44,6 @@ class RegularizedEvolution(MetaOptimizer):
         # We sample as many architectures as we need
         if epoch < self.population_size:
             logger.info("Start sampling architectures to fill the population")
-            # If there is no scope defined, let's use the search space default one
-
             model = (
                 torch.nn.Module()
             )
@@ -54,7 +52,6 @@ class RegularizedEvolution(MetaOptimizer):
             model.accuracy = model.arch.query(
                 self.performance_metric, self.dataset, dataset_api=self.dataset_api
             )
-
             self.population.append(model)
             self._update_history(model)
             log_every_n_seconds(

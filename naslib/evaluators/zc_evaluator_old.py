@@ -14,7 +14,6 @@ import torch.nn as nn
 
 from naslib.search_spaces.core.query_metrics import Metric
 from naslib import utils
-from naslib.utils.transfer_utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +100,14 @@ class ZeroCostPredictorEvaluator(object):
         return [xdata, ydata, None, None]
 
 
+    def process_pred_graph(self, pred_op_graph, pred_op_hash):
+        new_graph = {}
+        for ele in pred_op_graph:
+            neigbors = list(set(pred_op_graph[ele]))
+            new_graph[pred_op_hash[ele]] = [pred_op_hash[i] for i in neigbors]
+        return new_graph
+
+
     def load_dataset(self, load_labeled=False, data_size=10):
         """
         There are two ways to load an architecture.
@@ -138,30 +145,6 @@ class ZeroCostPredictorEvaluator(object):
 
         return [xdata, ydata, info, train_times]
 
-
-    def remove_suffix(self, string):
-        split_string = string.split('.')
-        if 'cell' in string:
-            return '.'.join([split_string[0] , split_string[1]])
-        return split_string[0]
-
-    def get_hashed_names(self, graph, arch):
-        hashed_names = collections.defaultdict(str)
-        counts = collections.defaultdict(int)
-        for name, module in arch.named_modules():
-            if name == '':
-                continue
-            layer_hash = hashlib.sha3_512()
-            layer_hash.update(str(module).encode())
-            name_without_suffix = self.remove_suffix(name)
-            for pred_name in graph.predecessors(name_without_suffix):
-                layer_hash.update(hashed_names[pred_name].encode())
-            layer_hash = layer_hash.hexdigest()
-            base_name = layer_hash + str(module)
-            hashed_names[name_without_suffix] = base_name + "_" + str(counts[base_name])
-            counts[base_name] += 1
-        return hashed_names
-
     def single_evaluate(self, test_data, zc_api, transfer_method=None):
         """
         Evaluate the predictor.
@@ -184,22 +167,20 @@ class ZeroCostPredictorEvaluator(object):
             else:
                 arch = self.search_space.clone()
                 arch.set_spec(arch_hash, self.dataset_api)
+                counts = collections.defaultdict(int)
+                pred_graph = collections.defaultdict(list)
+                pred_op_graph = collections.defaultdict(list)
+                pred_op_hash = collections.defaultdict(None)
+                hashed_names = collections.defaultdict(str) 
+                layer_hash_map = collections.defaultdict(None) 
+                #arch.parse_datastates(counts, pred_graph, hashed_names, layer_hash_map, pred_op_graph, pred_op_hash)
                 arch.parse()
                 digraph = arch.flatten_and_parse()
-                self.predictor.train_loader = copy.deepcopy(self.train_loader)
-                if self.config.transfer_weights:
-                    hashed_names = get_hashed_names(digraph, arch) 
-                    pred_graph_processed = process_pred_graph(hashed_names, digraph)
-                    pred = self.predictor.query(
-                                                arch, 
-                                                dataloader=self.predictor.train_loader, 
-                                                pred_graph=pred_graph_processed, 
-                                                name_hash=hashed_names, 
-                                                transfer_method=transfer_method
-                                                )
-                else:
-                    pred = self.predictor.query(arch, dataloader=self.predictor.train_loader)
-
+                print(digraph.edges)
+                #self.predictor.train_loader = copy.deepcopy(self.train_loader)
+                #pred_graph_processed = self.process_pred_graph(pred_op_graph, pred_op_hash)
+                #pred = self.predictor.query(arch, dataloader=self.predictor.train_loader, pred_graph=pred_graph_processed, transfer_method=transfer_method)
+                 
             if float("-inf") == pred:
                 pred = -1e9
             elif float("inf") == pred:

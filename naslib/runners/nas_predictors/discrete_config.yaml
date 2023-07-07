@@ -1,26 +1,23 @@
 seed: 0
-optimizer: bananas
+optimizer: re
 search_space: nasbench201
 dataset: cifar10
 out_dir: run
 
 search:
   checkpoint_freq: 1000
-  epochs: 100
+  epochs: 20
   fidelity: -1
 
-  predictor_type: var_sparse_gp
+  zc_names: snip
+  predictor_type: zc
+  predictor: snip
   num_init: 10  
   k: 10
 
-  # BANANAS
-  num_ensemble: 3
-  acq_fn_type: its
-  acq_fn_optimization: random_sampling
-  encoding_type: adjacency_one_hot
-  num_arches_to_mutate: 2
-  max_mutations: 1
-  num_candidates: 20
+  # RE
+  sample_size: 10
+  population_size: 50
   
   # jacov data loader
   batch_size: 256

@@ -1,4 +1,5 @@
 import codecs
+import collections
 from naslib.search_spaces.core.graph import Graph
 from naslib.utils.vis import plot_architectural_weights
 import time
@@ -8,7 +9,7 @@ import os
 import copy
 import torch
 import numpy as np
-
+import naslib
 from fvcore.common.checkpoint import PeriodicCheckpointer
 
 from naslib.search_spaces.core.query_metrics import Metric
@@ -20,7 +21,7 @@ from typing import Callable
 from .additional_primitives import DropPathWrapper
 
 logger = logging.getLogger(__name__)
-
+from naslib.search_spaces.core.query_metrics import Metric
 
 class Trainer(object):
     """
@@ -32,7 +33,7 @@ class Trainer(object):
     required logic.
     """
 
-    def __init__(self, optimizer, config, lightweight_output=False):
+    def __init__(self, config, log_dir='.', optimizer=None, lightweight_output=False):
         """
         Initializes the trainer.
 
@@ -41,11 +42,15 @@ class Trainer(object):
             config (AttrDict): The configuration loaded from a yaml file, e.g
                 via  `utils.get_config_from_args()`
         """
+        self._log_dir = log_dir
         self.optimizer = optimizer
         self.config = config
         self.epochs = self.config.search.epochs
         self.lightweight_output = lightweight_output
-
+        self._sample_size = config.search.sample_size
+        self._population_size = config.search.population_size
+        self._population = collections.deque(maxlen=self._population_size)
+        self._random_state = np.random.RandomState()
         # preparations
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -57,7 +62,8 @@ class Trainer(object):
         self.val_top5 = utils.AverageMeter()
         self.val_loss = utils.AverageMeter()
 
-        n_parameters = optimizer.get_model_size()
+        n_parameters = 0
+        #n_parameters = optimizer.get_model_size()
         # logger.info("param size = %fMB", n_parameters)
         self.search_trajectory = utils.AttrDict(
             {
@@ -74,7 +80,40 @@ class Trainer(object):
             }
         )
 
-    def search(self, resume_from="", summary_writer=None, after_epoch: Callable[[int], None]=None, report_incumbent=True):
+    def adapt_search_space(self, search_space: Graph, scope: str = None, dataset_api: dict = None):
+        assert (
+            search_space.QUERYABLE
+        ), "Regularized evolution is currently only implemented for benchmarks."
+        self.search_space = search_space.clone()
+        self.scope = scope if scope else search_space.OPTIMIZER_SCOPE
+        self.dataset_api = dataset_api
+
+
+    def _gen_random_batch(self, size):
+        batch = []
+        for _ in range(size):
+            cfg = {}
+            model = (
+                torch.nn.Module()
+            )
+            model.arch = self.search_space.clone()
+            model.arch.sample_random_architecture(dataset_api=self.dataset_api)
+            #TODO change this maybe
+            cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(model.arch)
+            cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
+            cfg['performance_metric'] = Metric.VAL_ACCURACY 
+            cfg['dataset_api'] = self.dataset_api
+            cfg['dataset'] = self.config.dataset
+            batch.append(cfg)
+        return batch
+
+
+    def _saved_keys(self, job):
+        res = {"arch_seq": job.config["arch_seq"]}
+        return res
+
+
+    def search(self, evaluator=None, resume_from="", summary_writer=None, after_epoch: Callable[[int], None]=None, report_incumbent=True):
         """
         Start the architecture search.
 
@@ -85,140 +124,56 @@ class Trainer(object):
                 train from scratch.
         """
         logger.info("Beginning search")
-
+        self._evaluator = evaluator
         np.random.seed(self.config.search.seed)
         torch.manual_seed(self.config.search.seed)
-
-        self.optimizer.before_training()
-        checkpoint_freq = self.config.search.checkpoint_freq
-        if self.optimizer.using_step_function:
-            self.scheduler = self.build_search_scheduler(
-                self.optimizer.op_optimizer, self.config
-            )
-
-            start_epoch = self._setup_checkpointers(
-                resume_from, period=checkpoint_freq, scheduler=self.scheduler
-            )
-        else:
-            start_epoch = self._setup_checkpointers(resume_from, period=checkpoint_freq)
-
-        if self.optimizer.using_step_function:
-            self.train_queue, self.valid_queue, _ = self.build_search_dataloaders(
-                self.config
-            )
-
-        arch_weights = []
-        for e in range(start_epoch, self.epochs):
-
-            start_time = time.time()
-            self.optimizer.new_epoch(e)
-
-            if self.optimizer.using_step_function:
-                for step, data_train in enumerate(self.train_queue):
-                    
-                    if self.config.save_arch_weights is True:
-                        if len(arch_weights) == 0:
-                            for edge_weights in self.optimizer.architectural_weights:
-                                arch_weights.append(torch.unsqueeze(edge_weights.detach(), dim=0))
-                        else:
-                            for i, edge_weights in enumerate(self.optimizer.architectural_weights):
-                                arch_weights[i] = torch.cat((arch_weights[i], torch.unsqueeze(edge_weights.detach(), dim=0)), dim=0)
-                    
-                    data_train = (
-                        data_train[0].to(self.device),
-                        data_train[1].to(self.device, non_blocking=True),
-                    )
-                    data_val = next(iter(self.valid_queue))
-                    data_val = (
-                        data_val[0].to(self.device),
-                        data_val[1].to(self.device, non_blocking=True),
-                    )
-
-                    stats = self.optimizer.step(data_train, data_val)
-                    logits_train, logits_val, train_loss, val_loss = stats
-
-                    self._store_accuracies(logits_train, data_train[1], "train")
-                    self._store_accuracies(logits_val, data_val[1], "val")
-
-                    log_every_n_seconds(
-                        logging.INFO,
-                        "Epoch {}-{}, Train loss: {:.5f}, validation loss: {:.5f}, learning rate: {}".format(
-                            e, step, train_loss, val_loss, self.scheduler.get_last_lr()
-                        ),
-                        n=5,
-                    )
-
-                    if torch.cuda.is_available():
-                        log_first_n(
-                            logging.INFO,
-                            "cuda consumption\n {}".format(torch.cuda.memory_summary()),
-                            n=3,
+        
+        num_evals_done = 0
+        batch = self._gen_random_batch(size=self._evaluator.num_workers)
+        self._evaluator.submit(batch) 
+       
+        while self.epochs < 0  or num_evals_done < self.epochs:    
+            new_results = self._evaluator.gather("BATCH", 1)
+            num_received = len(new_results)
+            if num_received > 0:
+                self._population.extend(new_results)
+                self._evaluator.dump_evals(
+                    saved_keys=self._saved_keys, log_dir=self._log_dir
+                )
+                num_evals_done += num_received
+                if num_evals_done >= self.epochs:
+                    break
+                # If the population is big enough evolve the population
+                if len(self._population) == self._population_size:
+                    children_batch = []
+                    # For each new parent/result we create a child from it
+                    for _ in range(num_received):
+                        # select_sample
+                        indexes = self._random_state.choice(
+                            self._population_size, self._sample_size, replace=False
                         )
+                        sample = [self._population[i] for i in indexes]
+                        # select_parent
+                        parent = max(sample,  key=lambda x: x.accuracy)
+                        # copy_mutate_parent
+                        child = (
+                            torch.nn.Module()
+                        )
+                        child.arch = self.search_space.clone()
+                        child.arch.mutate(parent.arch, dataset_api=self.dataset_api)
+                        child_cfg['performance_metric'] = Metric.VAL_ACCURACY
+                        child_cfg['dataset_api'] = self.dataset_api
+                        child_cfg['dataset'] = self.config.dataset
+                        child_cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(model.arch)
+                        child_cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
+                        # add child to batch
+                        children_batch.append(child_cfg)
 
-                    self.train_loss.update(float(train_loss.detach().cpu()))
-                    self.val_loss.update(float(val_loss.detach().cpu()))
+                    # submit_childs
+                    self._evaluator.submit(children_batch)
 
-                self.scheduler.step()
-
-                end_time = time.time()
-
-                self.search_trajectory.train_acc.append(self.train_top1.avg)
-                self.search_trajectory.train_loss.append(self.train_loss.avg)
-                self.search_trajectory.valid_acc.append(self.val_top1.avg)
-                self.search_trajectory.valid_loss.append(self.val_loss.avg)
-                self.search_trajectory.runtime.append(end_time - start_time)
-            else:
-                end_time = time.time()
-                # TODO: nasbench101 does not have train_loss, valid_loss, test_loss implemented, so this is a quick fix for now
-                # train_acc, train_loss, valid_acc, valid_loss, test_acc, test_loss = self.optimizer.train_statistics()
-                (
-                    train_acc,
-                    valid_acc,
-                    test_acc,
-                    train_time,
-                ) = self.optimizer.train_statistics(report_incumbent)
-                train_loss, valid_loss, test_loss = -1, -1, -1
-
-                self.search_trajectory.train_acc.append(train_acc)
-                self.search_trajectory.train_loss.append(train_loss)
-                self.search_trajectory.valid_acc.append(valid_acc)
-                self.search_trajectory.valid_loss.append(valid_loss)
-                self.search_trajectory.test_acc.append(test_acc)
-                self.search_trajectory.test_loss.append(test_loss)
-                self.search_trajectory.runtime.append(end_time - start_time)
-                self.search_trajectory.train_time.append(train_time)
-                self.train_top1.avg = train_acc
-                self.val_top1.avg = valid_acc
-
-            self.periodic_checkpointer.step(e)
-
-            anytime_results = self.optimizer.test_statistics()
-            # if anytime_results:
-                # record anytime performance
-                # self.search_trajectory.arch_eval.append(anytime_results)
-                # log_every_n_seconds(
-                #     logging.INFO,
-                #     "Epoch {}, Anytime results: {}".format(e, anytime_results),
-                #     n=5,
-                # )
-
-            self._log_to_json()
-
-            self._log_and_reset_accuracies(e, summary_writer)
-
-            if after_epoch is not None:
-                after_epoch(e)
-
-        logger.info(f"Saving architectural weight tensors: {self.config.save}/arch_weights.pt")
-        if hasattr(self.config, "save_arch_weights") and self.config.save_arch_weights:
-            torch.save(arch_weights, f'{self.config.save}/arch_weights.pt')
-            if hasattr(self.config, "plot_arch_weights") and self.config.plot_arch_weights:
-                plot_architectural_weights(self.config, self.optimizer)
-
-        self.optimizer.after_training()
-
-        if summary_writer is not None:
-            summary_writer.close()
+                else:  # If the population is too small keep increasing it
+                    self._evaluator.submit(self._gen_random_batch(size=num_received))
 
         logger.info("Training finished")
 
@@ -291,186 +246,27 @@ class Trainer(object):
             dataset_api         : Dataset API to use for querying model performance.
             metric              : Metric to query the benchmark for.
         """
+        print("Start evaluation")
         logger.info("Start evaluation")
         if not best_arch:
-
             if not search_model:
                 search_model = os.path.join(
                     self.config.save, "search", "model_final.pth"
                 )
-            self._setup_checkpointers(search_model)  # required to load the architecture
+            #self._setup_checkpointers(search_model)  # required to load the architecture
 
             best_arch = self.optimizer.get_final_architecture()
         logger.info(f"Final architecture hash: {best_arch.get_hash()}")
 
-        if best_arch.QUERYABLE:
-            if metric is None:
-                metric = Metric.TEST_ACCURACY
-            result = best_arch.query(
-                metric=metric, dataset=self.config.dataset, dataset_api=dataset_api
-            )
-            logger.info("Queried results ({}): {}".format(metric, result))
-            return result
-        else:
-            best_arch.to(self.device)
-            if retrain:
-                logger.info("Starting retraining from scratch")
-                best_arch.reset_weights(inplace=True)
-
-                (
-                    self.train_queue,
-                    self.valid_queue,
-                    self.test_queue,
-                ) = self.build_eval_dataloaders(self.config)
-
-                optim = self.build_eval_optimizer(best_arch.parameters(), self.config)
-                scheduler = self.build_eval_scheduler(optim, self.config)
-
-                start_epoch = self._setup_checkpointers(
-                    resume_from,
-                    search=False,
-                    period=self.config.evaluation.checkpoint_freq,
-                    model=best_arch,  # checkpointables start here
-                    optim=optim,
-                    scheduler=scheduler,
-                )
-
-                grad_clip = self.config.evaluation.grad_clip
-                loss = torch.nn.CrossEntropyLoss()
-
-                self.train_top1.reset()
-                self.train_top5.reset()
-                self.val_top1.reset()
-                self.val_top5.reset()
-
-                # Enable drop path
-                best_arch.update_edges(
-                    update_func=lambda edge: edge.data.set(
-                        "op", DropPathWrapper(edge.data.op)
-                    ),
-                    scope=best_arch.OPTIMIZER_SCOPE,
-                    private_edge_data=True,
-                )
-
-                # train from scratch
-                epochs = self.config.evaluation.epochs
-                for e in range(start_epoch, epochs):
-                    best_arch.train()
-
-                    if torch.cuda.is_available():
-                        log_first_n(
-                            logging.INFO,
-                            "cuda consumption\n {}".format(torch.cuda.memory_summary()),
-                            n=20,
-                        )
-
-                    # update drop path probability
-                    drop_path_prob = self.config.evaluation.drop_path_prob * e / epochs
-                    best_arch.update_edges(
-                        update_func=lambda edge: edge.data.set(
-                            "drop_path_prob", drop_path_prob
-                        ),
-                        scope=best_arch.OPTIMIZER_SCOPE,
-                        private_edge_data=True,
-                    )
-
-                    # Train queue
-                    for i, (input_train, target_train) in enumerate(self.train_queue):
-                        input_train = input_train.to(self.device)
-                        target_train = target_train.to(self.device, non_blocking=True)
-
-                        optim.zero_grad()
-                        logits_train = best_arch(input_train)
-                        train_loss = loss(logits_train, target_train)
-                        if hasattr(
-                            best_arch, "auxilary_logits"
-                        ):  # darts specific stuff
-                            log_first_n(logging.INFO, "Auxiliary is used", n=10)
-                            auxiliary_loss = loss(
-                                best_arch.auxilary_logits(), target_train
-                            )
-                            train_loss += (
-                                self.config.evaluation.auxiliary_weight * auxiliary_loss
-                            )
-                        train_loss.backward()
-                        if grad_clip:
-                            torch.nn.utils.clip_grad_norm_(
-                                best_arch.parameters(), grad_clip
-                            )
-                        optim.step()
-
-                        self._store_accuracies(logits_train, target_train, "train")
-                        log_every_n_seconds(
-                            logging.INFO,
-                            "Epoch {}-{}, Train loss: {:.5}, learning rate: {}".format(
-                                e, i, train_loss, scheduler.get_last_lr()
-                            ),
-                            n=5,
-                        )
-
-                    # Validation queue
-                    if self.valid_queue:
-                        best_arch.eval()
-                        for i, (input_valid, target_valid) in enumerate(
-                            self.valid_queue
-                        ):
-
-                            input_valid = input_valid.to(self.device).float()
-                            target_valid = target_valid.to(self.device).float()
-
-                            # just log the validation accuracy
-                            with torch.no_grad():
-                                logits_valid = best_arch(input_valid)
-                                self._store_accuracies(
-                                    logits_valid, target_valid, "val"
-                                )
-
-                    scheduler.step()
-                    self.periodic_checkpointer.step(e)
-                    self._log_and_reset_accuracies(e)
-
-            # Disable drop path
-            best_arch.update_edges(
-                update_func=lambda edge: edge.data.set(
-                    "op", edge.data.op.get_embedded_ops()
-                ),
-                scope=best_arch.OPTIMIZER_SCOPE,
-                private_edge_data=True,
-            )
-
-            # measure final test accuracy
-            top1 = utils.AverageMeter()
-            top5 = utils.AverageMeter()
-
-            best_arch.eval()
-
-            for i, data_test in enumerate(self.test_queue):
-                input_test, target_test = data_test
-                input_test = input_test.to(self.device)
-                target_test = target_test.to(self.device, non_blocking=True)
-
-                n = input_test.size(0)
-
-                with torch.no_grad():
-                    logits = best_arch(input_test)
-
-                    prec1, prec5 = utils.accuracy(logits, target_test, topk=(1, 5))
-                    top1.update(prec1.data.item(), n)
-                    top5.update(prec5.data.item(), n)
-
-                log_every_n_seconds(
-                    logging.INFO,
-                    "Inference batch {} of {}.".format(i, len(self.test_queue)),
-                    n=5,
-                )
-
-            logger.info(
-                "Evaluation finished. Test accuracies: top-1 = {:.5}, top-5 = {:.5}".format(
-                    top1.avg, top5.avg
-                )
-            )
-
-            return top1.avg
+        if metric is None:
+            metric = Metric.TEST_ACCURACY
+        
+        result = best_arch.query(
+            metric=metric, dataset=self.config.dataset, dataset_api=dataset_api
+        )
+        
+        logger.info("Queried results ({}): {}".format(metric, result))
+        return result
 
     @staticmethod
     def build_search_dataloaders(config):

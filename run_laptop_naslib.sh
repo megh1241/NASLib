@@ -5,4 +5,4 @@ cd $REPO_DIR
 source $INIT_SCRIPT
 
 cd $HOME/NASLib
-$mpilaunch -n 2 ./run_aux_script.sh
+$mpilaunch -n 4 ./run_aux_script.sh
