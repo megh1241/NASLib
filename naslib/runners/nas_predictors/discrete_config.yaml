@@ -6,7 +6,7 @@ out_dir: run
 
 search:
   checkpoint_freq: 1000
-  epochs: 20
+  epochs: 1000
   fidelity: -1
 
   zc_names: snip
@@ -16,7 +16,7 @@ search:
   k: 10
 
   # RE
-  sample_size: 10
+  sample_size: 5
   population_size: 50
   
   # jacov data loader
@@ -29,5 +29,5 @@ search:
   
   # other params
   debug_predictor: False
-  sample_size: 10
-  population_size: 30
+  sample_size: 5
+  population_size: 50

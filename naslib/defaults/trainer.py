@@ -22,6 +22,15 @@ from .additional_primitives import DropPathWrapper
 
 logger = logging.getLogger(__name__)
 from naslib.search_spaces.core.query_metrics import Metric
+from naslib.search_spaces import (
+    NasBench101SearchSpace,
+    NasBench201SearchSpace,
+    NasBench301SearchSpace,
+    NasBenchNLPSearchSpace,
+    TransBench101SearchSpaceMicro,
+    TransBench101SearchSpaceMacro,
+    NasBenchASRSearchSpace
+)
 
 class Trainer(object):
     """
@@ -100,10 +109,7 @@ class Trainer(object):
             model.arch.sample_random_architecture(dataset_api=self.dataset_api)
             #TODO change this maybe
             cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(model.arch)
-            cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
-            cfg['performance_metric'] = Metric.VAL_ACCURACY 
-            cfg['dataset_api'] = self.dataset_api
-            cfg['dataset'] = self.config.dataset
+            cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_str_to_op_indices(cfg['arch'])
             batch.append(cfg)
         return batch
 
@@ -131,8 +137,8 @@ class Trainer(object):
         num_evals_done = 0
         batch = self._gen_random_batch(size=self._evaluator.num_workers)
         self._evaluator.submit(batch) 
-       
-        while self.epochs < 0  or num_evals_done < self.epochs:    
+     
+        while self.epochs < 0  or num_evals_done < self.epochs:
             new_results = self._evaluator.gather("BATCH", 1)
             num_received = len(new_results)
             if num_received > 0:
@@ -154,21 +160,19 @@ class Trainer(object):
                         )
                         sample = [self._population[i] for i in indexes]
                         # select_parent
-                        parent = max(sample,  key=lambda x: x.accuracy)
+                        cfg, _ = max(sample,  key=lambda x: x[1])
                         # copy_mutate_parent
                         child = (
                             torch.nn.Module()
                         )
                         child.arch = self.search_space.clone()
-                        child.arch.mutate(parent.arch, dataset_api=self.dataset_api)
-                        child_cfg['performance_metric'] = Metric.VAL_ACCURACY
-                        child_cfg['dataset_api'] = self.dataset_api
-                        child_cfg['dataset'] = self.config.dataset
-                        child_cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(model.arch)
-                        child_cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
+                        child.arch.mutate_with_parent_op_indices(cfg['arch_seq'], dataset_api=self.dataset_api)
+                        child_cfg = {}
+                        child_cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(child.arch)
+                        child_cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_str_to_op_indices(child_cfg['arch'])
                         # add child to batch
                         children_batch.append(child_cfg)
-
+                    
                     # submit_childs
                     self._evaluator.submit(children_batch)
 

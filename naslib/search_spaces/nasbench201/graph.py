@@ -4,6 +4,7 @@ import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import typing
 from typing import *
 
 from naslib.search_spaces.core import primitives as ops
@@ -273,6 +274,19 @@ class NasBench201SearchSpace(Graph):
         update the naslib object and op_indices
         """
         parent_op_indices = parent.get_op_indices()
+        op_indices = list(parent_op_indices)
+
+        edge = np.random.choice(len(parent_op_indices))
+        available = [o for o in range(len(OP_NAMES)) if o != parent_op_indices[edge]]
+        op_index = np.random.choice(available)
+        op_indices[edge] = op_index
+        self.set_op_indices(op_indices)
+
+    def mutate_with_parent_op_indices(self, parent_op_indices: typing.Any, dataset_api: dict = None) -> None:
+        """
+        This will mutate one op from the parent op indices, and then
+        update the naslib object and op_indices
+        """
         op_indices = list(parent_op_indices)
 
         edge = np.random.choice(len(parent_op_indices))

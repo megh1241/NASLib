@@ -1,6 +1,7 @@
 import logging
 import os
 import abc
+import torch
 
 class MPIExperimentSetup(metaclass=abc.ABCMeta):
     def __init__(self, *_args, **_kwargs):
@@ -17,18 +18,19 @@ class MPIExperimentSetup(metaclass=abc.ABCMeta):
         if not MPI.Is_initialized():
             MPI.Init_thread()
 
-        '''
-        if gpus:
-            if ds_colocated:
-                rank = MPI.COMM_WORLD.Get_rank()
-                num_nodes = MPI.COMM_WORLD.Get_size()  / 6
-            else:
-                rank = MPI.COMM_WORLD.Get_rank()
-        '''
+        gpus_per_node = [torch.cuda.device(i) for i in range(torch.cuda.device_count())]
+        if ds_colocated:
+            rank = MPI.COMM_WORLD.Get_rank()
+            num_nodes = MPI.COMM_WORLD.Get_size()  / 6
+            gpu_local_idx = (int(rank/num_nodes)-1) % gpu_per_node
+        else:
+            rank = MPI.COMM_WORLD.Get_rank()
+            gpu_local_idx = (rank-1) % gpu_per_node
 
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_local_idx) 
+    
     def evaluator_method_kwargs(self):
-        t = {"comm": self.workcomm}
-        return t
+        return {"comm": self.workcomm}
 
     def trainer_method_kwargs(self):
         return {}

@@ -73,6 +73,8 @@ def default_argument_parser():
     )
     parser.add_argument("--config-file", default=None,
                         metavar="FILE", help="path to config file")
+    parser.add_argument("--log_dir", default='.',
+                        type=str, help="log_dir")
     parser.add_argument(
         "--eval-only", action="store_true", help="perform evaluation only"
     )
@@ -195,10 +197,8 @@ def get_config_from_args(args=None, config_type="nas"):
     logger.info("Command line args: {}".format(args))
 
     if args.config_file is None:
-        print("IF")
         config = load_default_config(config_type=config_type)
     else:
-        print("ELSE")
         config = load_config(path=args.config_file)
     
     # Override file args with ones from command line
@@ -215,7 +215,7 @@ def get_config_from_args(args=None, config_type="nas"):
         config.resume = args.resume
         config.model_path = args.model_path
         config.transfer_weights = args.transfer_weights
-
+        config.log_dir = args.log_dir 
         # load config file
         config.set_new_allowed(True)
         config.merge_from_list(args.opts)
