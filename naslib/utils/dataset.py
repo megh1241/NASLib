@@ -58,7 +58,8 @@ def get_train_val_loaders(config, mode="train"):
 
         train_transform, valid_transform = _data_transforms_ImageNet_16_120(
             config)
-        data_folder = f"{data}/{dataset}"
+        #data_folder = f"{data}/{dataset}"
+        data_folder = '/home/mmadhya1/NASLib/data'
         train_data = ImageNet16(
             root=data_folder,
             train=True,
@@ -157,7 +158,7 @@ def get_train_val_loaders(config, mode="train"):
         train_data,
         batch_size=batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        pin_memory=True,
+        #pin_memory=True,
         num_workers=0,
         worker_init_fn=np.random.seed(seed + 1),
     )
@@ -167,7 +168,7 @@ def get_train_val_loaders(config, mode="train"):
         batch_size=batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(
             indices[split:num_train]),
-        pin_memory=True,
+        #pin_memory=True,
         num_workers=0,
         worker_init_fn=np.random.seed(seed),
     )
@@ -176,7 +177,7 @@ def get_train_val_loaders(config, mode="train"):
         test_data,
         batch_size=batch_size,
         shuffle=False,
-        pin_memory=True,
+        #pin_memory=True,
         num_workers=0,
         worker_init_fn=np.random.seed(seed),
     )

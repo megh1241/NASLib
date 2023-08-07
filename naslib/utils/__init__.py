@@ -96,6 +96,20 @@ def default_argument_parser():
         action="store_true"
     )
     parser.add_argument(
+        "--transfer_method",
+        type=str,
+        default='datastates'
+    )
+    parser.add_argument(
+        "--eval_method_str",
+        type=str
+    )
+    parser.add_argument(
+        "--train_epochs",
+        default=-1,
+        type=int,
+    )
+    parser.add_argument(
         "--rank", default=0, type=int, help="node rank for distributed training"
     )
     parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
@@ -215,7 +229,11 @@ def get_config_from_args(args=None, config_type="nas"):
         config.resume = args.resume
         config.model_path = args.model_path
         config.transfer_weights = args.transfer_weights
+        config.eval_method_str = args.eval_method_str
+        config.transfer_method = args.transfer_method
         config.log_dir = args.log_dir 
+        config.train_epochs = args.train_epochs
+
         # load config file
         config.set_new_allowed(True)
         config.merge_from_list(args.opts)

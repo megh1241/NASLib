@@ -21,6 +21,7 @@ import torch.nn.functional as F
 import copy
 import types
 import uuid
+import time
 
 from . import measure
 from ..p_utils import get_layer_metric_array
@@ -43,9 +44,19 @@ def snip_forward_linear(self, x):
 
 
 @measure("snip", bn=True, mode="param")
-def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, pred_graph=None, name_hash=None, transfer_method=None):
-    model_id = int(uuid.uuid4().int>>64)
+def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,split_data=1, pred_graph=None, name_hash=None, transfer_method=None, timing_dict={}):
+    total_start = time.time()
+    #model_id = int(uuid.uuid4().int>>64)
+    #print('model id: ', model_id, flush=True)
+    
+    #start_transfer = time.time()
+    #transferred, parent_id = transfer_method.transfer(
+    #    net, id=model_id, hint=name_hash['parent']
+    #)
+    #end_transfer = time.time()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    inputs, targets = inputs.to(device), targets.to(device)
     for layer in net.modules():
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
             layer.weight_mask = nn.Parameter(torch.ones_like(layer.weight))
@@ -61,10 +72,25 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, p
     # Compute gradients (but don't apply them)
     net.zero_grad()
     N = inputs.shape[0]
+    start_transfer = time.time()
+    if name_hash['parent'] != None:
+        del name_hash['parent']
+        #transferred, _ = transfer_method.transfer(
+        #    net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
+        #)
+    else:
+        del name_hash['parent']
+        transferred = []
     if transfer_method:
-        transferred, parent_id = transfer_method.transfer(
+        #transferred, parent_id = transfer_method.transfer(
+        #    net, id=model_id, hint=name_hash['parent']
+        #)
+        transferred, parent_id, trl = transfer_method.transfer(
             net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
         )
+        timing_dict['transferred'] = len(trl) 
+    end_transfer = time.time()
+    #end_transfer = time.time()
     for sp in range(split_data):
         st = sp * N // split_data
         en = (sp + 1) * N // split_data
@@ -87,9 +113,14 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, p
         for i in range(len(grads_abs)):
             sum1 += torch.sum(grads_abs[i])
         sum1  = sum1.item()
-        print('val acc: ', sum1, flush=True)
-        print("before store", flush=True)
+        start_store = time.time()
+        ''' 
         transfer_method.store(
+                              id=model_id,
+                              model=net,
+                              )
+        ''' 
+        slu = transfer_method.store(
                               id=model_id, 
                               model=net, 
                               name_hash=name_hash, 
@@ -97,6 +128,13 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, split_data=1, p
                               prefix=transferred, 
                               val_acc=sum1
                               )
-    print("after store", flush=True)
+        end_store = time.time()
+        timing_dict['stored'] = slu 
+        timing_dict['store_time'] = end_store - start_store
+
+    timing_dict['transfer_time'] = end_transfer - start_transfer
+    timing_dict['train_time'] = end_store - total_start
+    print("store time: ", timing_dict['store_time'], flush=True)
+    print("transfer time: ", timing_dict['transfer_time'], flush=True)
 
     return grads_abs

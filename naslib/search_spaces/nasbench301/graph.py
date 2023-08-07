@@ -487,10 +487,10 @@ class NasBench301SearchSpace(Graph):
         This will mutate one op from the parent op indices, and then
         update the naslib object and op_indices
         """
-        parent_compact = parent.get_compact()
-        parent_compact = make_compact_mutable(parent_compact)
+        #parent_compact = parent.get_compact()
+        #parent_compact = make_compact_mutable(parent_compact)
+        parent_compact = make_compact_mutable(parent)
         compact = parent_compact
-
         while True:
             for _ in range(int(mutation_rate)):
                 cell = np.random.choice(2)
@@ -669,6 +669,7 @@ def _truncate_input_edges(node: tuple, in_edges: list, out_edges: list) -> None:
             # We are in the discrete case (e.g. random search)
             for _, data in in_edges:
                 if isinstance(data.op, list) and data.op[1].get_op_name == "Zero":
+                #if isinstance(data.op, list) and not isinstance(data.op[1], list) and data.op[1].get_op_name == "Zero":
                     data.op.pop(1)
             if any(e.has("final") and e.final for _, e in in_edges):
                 return  # TODO: how about mixed final and non-final?

@@ -6,6 +6,7 @@ import collections
 import torch
 import random
 import inspect
+import functools
 
 from networkx.algorithms.dag import lexicographical_topological_sort
 
@@ -16,6 +17,12 @@ from .query_metrics import Metric
 
 logger = logging.getLogger(__name__)
 
+def f_nodedata():
+    return dict({"input": {}, "comb_op": sum})
+
+
+def f_edgedata():
+    return EdgeData()
 
 class Graph(torch.nn.Module, nx.DiGraph):
     """
@@ -122,14 +129,19 @@ class Graph(torch.nn.Module, nx.DiGraph):
         # across different Graph instances.
 
         # self._nxgraph.edge_attr_dict_factory = lambda: EdgeData()
-        self.edge_attr_dict_factory = lambda: EdgeData()
+        #self.edge_attr_dict_factory = lambda: EdgeData()
+        self.edge_attr_dict_factory = f_edgedata
+        #EdgeData()
+        #self.edge_attr_dict_factory = lambda: EdgeData()
 
         # Replace the default dicts at the nodes to include `input` from the beginning.
         # `input` is required for storing the results of incoming edges.
 
         # self._nxgraph.node_attr_dict_factory = lambda: dict({'input': {}, 'comb_op': sum})
-        self.node_attr_dict_factory = lambda: dict({"input": {}, "comb_op": sum})
-
+        #self.node_attr_dict_factory = lambda: dict({"input": {}, "comb_op": sum})
+        self.node_attr_dict_factory = f_nodedata
+        #self.node_attr_dict_factory = dict({"input": {}, "comb_op": sum})
+        #self.node_attr_dict_factory = myfun(lambda: dict({"input": {}, "comb_op": sum}))
         # remember to add all members also in `unparse()`
         self.name = name
         self.scope = scope
@@ -486,7 +498,6 @@ class Graph(torch.nn.Module, nx.DiGraph):
                                             )
                 elif edge_data.op.get_embedded_ops():
                     for primitive in edge_data.op.get_embedded_ops():
-                        print(primitive)
                         if isinstance(primitive, Graph):
                             out_nodes_temp = self.child_parse(primitive, 
                                             nx_digraph, 

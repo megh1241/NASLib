@@ -31,6 +31,7 @@ from naslib.search_spaces import (
     TransBench101SearchSpaceMacro,
     NasBenchASRSearchSpace
 )
+#from ._simplehdf5_pytorch import TransferSimpleHDF5Pytorch
 
 class Trainer(object):
     """
@@ -108,14 +109,22 @@ class Trainer(object):
             model.arch = self.search_space.clone()
             model.arch.sample_random_architecture(dataset_api=self.dataset_api)
             #TODO change this maybe
-            cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(model.arch)
-            cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_str_to_op_indices(cfg['arch'])
+            if self.config.search_space == 'nasbench201':
+                cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
+                cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
+            elif self.config.search_space == 'nasbench301':
+                cfg['arch'] = naslib.search_spaces.nasbench301.conversions.convert_naslib_to_compact(model.arch)
+                cfg['arch'] = model.arch
             batch.append(cfg)
         return batch
 
 
     def _saved_keys(self, job):
-        res = {"arch_seq": job.config["arch_seq"]}
+        res = {"arch_seq": job.config["arch_seq"] }
+        if 'timing_dict' in job.config:
+            keys = ['train_time', 'transfer_time', 'store_time', 'transferred', 'stored']
+            for key in keys:
+                res[key] = job.config["timing_dict"][key]
         return res
 
 
@@ -143,8 +152,14 @@ class Trainer(object):
             num_received = len(new_results)
             if num_received > 0:
                 self._population.extend(new_results)
+                #self._evaluator.dump_evals(
+                #    saved_keys=self._saved_keys,  log_dir=self._log_dir
+                #)
+                #for i in new_results:
+                #    print(i.result, flush=True)
+                
                 self._evaluator.dump_evals(
-                    saved_keys=self._saved_keys, log_dir=self._log_dir
+                    saved_keys=self._saved_keys, timings_dict=new_results[0].result[1], log_dir=self._log_dir
                 )
                 num_evals_done += num_received
                 if num_evals_done >= self.epochs:
@@ -158,19 +173,33 @@ class Trainer(object):
                         indexes = self._random_state.choice(
                             self._population_size, self._sample_size, replace=False
                         )
+
                         sample = [self._population[i] for i in indexes]
                         # select_parent
-                        cfg, _ = max(sample,  key=lambda x: x[1])
+                        cfg, vals = max(sample,  key=lambda x: x[1][0])
                         # copy_mutate_parent
                         child = (
                             torch.nn.Module()
                         )
-                        child.arch = self.search_space.clone()
-                        child.arch.mutate_with_parent_op_indices(cfg['arch_seq'], dataset_api=self.dataset_api)
                         child_cfg = {}
-                        child_cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_str(child.arch)
-                        child_cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_str_to_op_indices(child_cfg['arch'])
-                        # add child to batch
+                        child_cfg['arch_seq'] = 'arch'
+                        if self.config.search_space == 'nasbench201':
+                            child.arch = self.search_space.clone()
+                            child.arch.mutate_with_parent_op_indices(cfg['arch'], dataset_api=self.dataset_api)
+                            child_cfg['arch'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(child.arch)
+                            child_cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(child.arch)
+                        elif self.config.search_space == 'nasbench301':
+                            parent = NasBench301SearchSpace(n_classes=10)
+                            child.arch = parent
+                            child.arch.mutate(cfg['arch'], dataset_api=self.dataset_api)
+                            child_cfg['arch'] = naslib.search_spaces.nasbench301.conversions.convert_naslib_to_compact(child.arch)
+                            child_cfg['arch_seq'] = 'arch'
+                        else:
+                            raise Exception('Sorry the search space is not supported')
+                        
+                        #print('vals[2]: ', vals[2], flush=True)
+                        child_cfg['parent'] = vals[2]
+
                         children_batch.append(child_cfg)
                     
                     # submit_childs
@@ -250,8 +279,8 @@ class Trainer(object):
             dataset_api         : Dataset API to use for querying model performance.
             metric              : Metric to query the benchmark for.
         """
-        print("Start evaluation")
-        logger.info("Start evaluation")
+        #print("Start evaluation")
+        #logger.info("Start evaluation")
         if not best_arch:
             if not search_model:
                 search_model = os.path.join(

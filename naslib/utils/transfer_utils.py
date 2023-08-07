@@ -16,6 +16,8 @@ def get_hashed_names(graph, arch):
         layer_hash = hashlib.sha3_512()
         layer_hash.update(str(module).encode())
         name_without_suffix = remove_suffix(name)
+        if name_without_suffix not in graph:
+            continue
         for pred_name in graph.predecessors(name_without_suffix):
             layer_hash.update(hashed_names[pred_name].encode())
         layer_hash = layer_hash.hexdigest()

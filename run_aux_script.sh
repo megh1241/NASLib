@@ -7,7 +7,7 @@ if [[ $OMPI_COMM_WORLD_RANK -ge 3 ]]; then
 	./cpp-store/server \
                 --thallium_connection_string "tcp"\
                 --num_threads 1 \
-                --num_servers 1 \
+                --num_servers 2 \
                 --storage_backend "map" \
                 --ds_colocated 0
 else

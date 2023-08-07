@@ -42,16 +42,17 @@ def find_measures_arrays(
     trainloader,
     dataload_info,
     device,
+    model_id=None,
     measure_names=None,
     loss_fn=F.cross_entropy,
     transfer_method=None,
     name_hash=None,
-    pred_graph=None
+    pred_graph=None,
+    timing_dict={}
 ):
     if measure_names is None:
         measure_names = measures.available_measures
 
-    print(',easure: nammes: ', measure_names)
     dataload, num_imgs_or_batches, num_classes = dataload_info
 
     if not hasattr(net_orig, "get_prunable_copy"):
@@ -84,18 +85,19 @@ def find_measures_arrays(
         try:
             for measure_name in measure_names:
                 if measure_name not in measure_values:
-                    print('measure name calc measure: ', measure_name)
                     val = measures.calc_measure(
                         measure_name,
                         net_orig,
                         device,
                         inputs,
                         targets,
+                        model_id=model_id,
                         loss_fn=loss_fn,
                         split_data=ds,
                         transfer_method=transfer_method,
                         name_hash=name_hash,
-                        pred_graph=pred_graph
+                        pred_graph=pred_graph,
+                        timing_dict=timing_dict
                     )
                     measure_values[measure_name] = val
 
@@ -128,15 +130,16 @@ def find_measures(
     measure_names=None,  # an array of measure names to compute, if left blank, all measures are computed by default
     measures_arr=None,
     transfer_method=None,
+    model_id=None,
     name_hash=None,
-    pred_graph=None
+    pred_graph=None,
+    timing_dict={} 
 ):
 
     # Given a neural net
     # and some information about the input data (dataloader)
     # and loss function (loss_fn)
     # this function returns an array of zero-cost proxy metrics.
-    print("insiode get_measures arra")
     def sum_arr(arr):
         sum = 0.0
         for i in range(len(arr)):
@@ -167,11 +170,13 @@ def find_measures(
             dataloader,
             dataload_info,
             device,
+            model_id=model_id,
             loss_fn=loss_fn,
             measure_names=measure_names,
             transfer_method=transfer_method,
             name_hash=name_hash,
-            pred_graph=pred_graph
+            pred_graph=pred_graph,
+            timing_dict=timing_dict
         )
 
     for k, v in measures_arr.items():

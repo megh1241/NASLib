@@ -18,7 +18,8 @@ class MPIExperimentSetup(metaclass=abc.ABCMeta):
         if not MPI.Is_initialized():
             MPI.Init_thread()
 
-        gpus_per_node = [torch.cuda.device(i) for i in range(torch.cuda.device_count())]
+        '''
+        gpu_per_node = 4
         if ds_colocated:
             rank = MPI.COMM_WORLD.Get_rank()
             num_nodes = MPI.COMM_WORLD.Get_size()  / 6
@@ -26,8 +27,11 @@ class MPIExperimentSetup(metaclass=abc.ABCMeta):
         else:
             rank = MPI.COMM_WORLD.Get_rank()
             gpu_local_idx = (rank-1) % gpu_per_node
-
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_local_idx) 
+        '''
+        gpu_per_node = 1
+        rank = MPI.COMM_WORLD.Get_rank()
+        gpu_local_idx = (rank) % gpu_per_node
+        #os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_local_idx) 
     
     def evaluator_method_kwargs(self):
         return {"comm": self.workcomm}

@@ -90,8 +90,9 @@ class NasBench201SearchSpace(Graph):
         self.add_nodes_from(range(1, total_num_nodes + 1))
         self.add_edges_from([(i, i + 1) for i in range(1, total_num_nodes)])
 
-        self.channels = [16, 32, 64]
-
+        #self.channels = [16, 32, 64]
+        #self.channels = [128, 256, 512]
+        self.channels = [512, 1024, 1024]
         #
         # operations at the edges
         #
