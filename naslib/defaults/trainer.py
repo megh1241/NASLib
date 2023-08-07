@@ -152,11 +152,6 @@ class Trainer(object):
             num_received = len(new_results)
             if num_received > 0:
                 self._population.extend(new_results)
-                #self._evaluator.dump_evals(
-                #    saved_keys=self._saved_keys,  log_dir=self._log_dir
-                #)
-                #for i in new_results:
-                #    print(i.result, flush=True)
                 
                 self._evaluator.dump_evals(
                     saved_keys=self._saved_keys, timings_dict=new_results[0].result[1], log_dir=self._log_dir
@@ -197,7 +192,6 @@ class Trainer(object):
                         else:
                             raise Exception('Sorry the search space is not supported')
                         
-                        #print('vals[2]: ', vals[2], flush=True)
                         child_cfg['parent'] = vals[2]
 
                         children_batch.append(child_cfg)

@@ -88,7 +88,7 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
         transferred, parent_id, trl = transfer_method.transfer(
             net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
         )
-        timing_dict['transferred'] = len(trl) 
+        timing_dict['transferred'] = trl
     end_transfer = time.time()
     #end_transfer = time.time()
     for sp in range(split_data):
