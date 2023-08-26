@@ -28,10 +28,10 @@ class MPIExperimentSetup(metaclass=abc.ABCMeta):
             rank = MPI.COMM_WORLD.Get_rank()
             gpu_local_idx = (rank-1) % gpu_per_node
         '''
-        gpu_per_node = 1
+        gpu_per_node = 2
         rank = MPI.COMM_WORLD.Get_rank()
         gpu_local_idx = (rank) % gpu_per_node
-        #os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_local_idx) 
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_local_idx) 
     
     def evaluator_method_kwargs(self):
         return {"comm": self.workcomm}

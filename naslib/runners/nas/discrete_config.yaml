@@ -6,12 +6,12 @@ optimizer: re
 
 # nasbench101, nasbench201, darts, nlp, 
 # transbench101_micro, transbench101_macro, asr
-search_space: nasbench201
+search_space: nlp
 
 # nasbench201 datasets: cifar10, cifar100, ImageNet16-120
 # transbench101 datasets: class_scene, class_object, 
 # jigsaw, room_layout, segmentsemantic, normal, autoencoder
-dataset: cifar10
+dataset: ptb
 
 # output results to this directory
 out_dir: run

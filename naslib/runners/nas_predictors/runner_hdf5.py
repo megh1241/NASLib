@@ -18,8 +18,6 @@ from deephyper.nas.run._util import (
     load_config
 )
 
-import random
-from datetime import datetime
 from naslib.search_spaces import (
         NasBench101SearchSpace,
         NasBench201SearchSpace,
@@ -49,6 +47,7 @@ if not MPI.Is_initialized():
     MPI.Init_thread()
 rank = MPI.COMM_WORLD.rank
 size = MPI.COMM_WORLD.size
+
 
 
 def query_zc_scores(arch, model_id=0, pred_graph=None, name_hash=None, transfer_method=None, timing_dict={}):
@@ -186,16 +185,15 @@ def query_nasbench201(arch_str, metric, dataset, dataset_api):
 
 def model_size(model):
     param_size = 0
-    for name, param in model.named_parameters():
+    for param in model.parameters():
         param_size += param.nelement() * param.element_size()
-    #buffer_size = 0
-    #for buffer in model.buffers():
-    #    buffer_size += buffer.nelement() * buffer.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
 
     #size_all_mb = (param_size) / 1024**2
-    #size_all_mb = (param_size + buffer_size) / 1024**2
-    return param_size
-    #return size_all_mb
+    size_all_mb = (param_size + buffer_size) / 1024**2
+    return size_all_mb
 
 
 def query_nasbench301(
@@ -287,20 +285,10 @@ def run_query_zc_method(config):
   
     Time = time.time()
     tint = int(str(Time)[-1:])
-    
-
-    rank = MPI.COMM_WORLD.rank
-    random.seed(datetime.now().timestamp())
-    #model_id = int(int(uuid.uuid4().int>>64) / 100) * rank
-    tempid  = int(uuid.uuid4().int>>64) 
-    tempid = int(tempid / 1000)
-    tempid = int(tempid * 10)
-    model_id = tempid + rank
-    #model_id = int(uuid.uuid4().int>>64) 
-    #print('model id: ', model_id, " rank: ", rank, flush=True)
+    #model_id = np.int64(int(uuid.uuid4().int + tint))
+    model_id = int(uuid.uuid4().int>>64 + tint)
     transfer_time = 0 
-    #if parent is not None:
-    if 1==2:
+    if parent is not None:
         print('parebt not none!', flush=True)
         with open(str(parent) + '.txt', "r") as file:
             op_index_str = file.read()
@@ -318,16 +306,17 @@ def run_query_zc_method(config):
         )
         time2 = time.time()
         transfer_time = time2 - time1
-        #print('transfer time: ', time2 - time1, flush=True)
+        print('transfer time: ', time2 - time1, flush=True)
     else:
         model.parse()
         digraph = model.flatten_and_parse()
         name_hash = get_hashed_names(digraph, model)
-    
+        print('parebt  none!', flush=True)
+        transfer_time = 0
     pred_graph = process_pred_graph(name_hash, digraph)
     timing_dict1 = {}
     model_size_val = model_size(model)
-    #print('model_size: ', model_size_val, flush=True)
+    #print('Model size: ', model_size_val, flush=True)
     timing_dict1['model_size'] = model_size_val
     accuracy = query_zc_scores(
                             model,
@@ -337,12 +326,15 @@ def run_query_zc_method(config):
                             transfer_method=my_transfer_method,
                             timing_dict=timing_dict1
                 )
-    #lids = timing_dict1['cache_logs'][0]
-    #sizes = timing_dict1['cache_logs'][1]
-    #timings = timing_dict1['cache_logs'][2]
-    #all_lids.append(lids)
-    #all_sizes.append(sizes)
-    #all_timings.append(timings)
+    #name_hash['parent'] = parent
+    #torch.cuda.empty_cache()
+    #config['timing_dict'] = copy.deepcopy(timing_dict1)
+    time3 = time.time()
+    my_transfer_method.store(model_id, model, prefix=str(arch))
+    time4 = time.time()
+    #print('store time: ', time4 - time3, flush=True)
+    timing_dict1['store_time'] = time4 - time3
+    timing_dict1['transfer_time'] = transfer_time
     return accuracy, timing_dict1, model_id
 
 
@@ -408,7 +400,6 @@ eval_method = eval_dict[eval_method_str]
 search_space = get_search_space(name=config.search_space, dataset=config.dataset)
 trainer = Trainer(config, log_dir=config.log_dir, lightweight_output=True)
 trainer.adapt_search_space(search_space, dataset_api=dataset_api)
-time.sleep(10)
 if config.transfer_method == 'datastates':
     with Evaluator.create(
         eval_method,
@@ -425,11 +416,6 @@ else:
         if evaluator is not None:
             trainer.search(evaluator, resume_from="")
 
-
-#print('all timings len: ', len(all_timings), flush=True)
-#print('all sizes len: ', len(all_sizes), flush=True)
-#print('all lids len: ', len(all_lids), flush=True)
-#print(all_timings)
 #print(arch_seq_baseline_dict, flush=True)
 #import pickle
 

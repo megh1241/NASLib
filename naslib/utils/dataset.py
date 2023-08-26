@@ -144,6 +144,8 @@ def get_train_val_loaders(config, mode="train"):
         train_transform = cfg['train_transform_fn']
         valid_transform = cfg['val_transform_fn']
 
+    elif dataset == 'attn':
+        train_data, val_data, test_data = get_candle_datasets(config.data_dir)
     else:
         # 3 things for datasets
         # train_data, val_data, test_data

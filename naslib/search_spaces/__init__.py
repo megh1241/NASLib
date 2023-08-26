@@ -66,5 +66,7 @@ def get_search_space(name, dataset):
         return search_space_cls(n_classes=n_classes, in_channels=in_channels)
     elif name == 'nasbench101':
         return search_space_cls(n_classes=n_classes)
+    elif name == 'candleattn':
+        return search_space_cls()
     else:
         raise NotImplementedError(f'{name} search space not implemented')

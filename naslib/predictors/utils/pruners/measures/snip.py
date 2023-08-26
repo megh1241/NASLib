@@ -55,7 +55,7 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
     #)
     #end_transfer = time.time()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    #print(device, flush=True)
     inputs, targets = inputs.to(device), targets.to(device)
     for layer in net.modules():
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
@@ -72,25 +72,24 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
     # Compute gradients (but don't apply them)
     net.zero_grad()
     N = inputs.shape[0]
+    transferred = []
     start_transfer = time.time()
-    if name_hash['parent'] != None:
-        del name_hash['parent']
-        #transferred, _ = transfer_method.transfer(
-        #    net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
-        #)
-    else:
-        del name_hash['parent']
-        transferred = []
+    all_lids = []
+    all_sizes = []
+    all_timings = []
     if transfer_method:
-        #transferred, parent_id = transfer_method.transfer(
-        #    net, id=model_id, hint=name_hash['parent']
-        #)
-        transferred, parent_id, trl = transfer_method.transfer(
+        #transferred, parent_id, lids, sizes, timings = transfer_method.transfer(
+        transferred, parent_id = transfer_method.transfer(
             net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
         )
-        timing_dict['transferred'] = trl
+        timing_dict['transferred'] = 0 
+        
+        #if len(lids) > 0:
+        #    all_lids.extend(lids)
+        #    all_sizes.extend(sizes)
+        #    all_timings.extend(timings)
+
     end_transfer = time.time()
-    #end_transfer = time.time()
     for sp in range(split_data):
         st = sp * N // split_data
         en = (sp + 1) * N // split_data
@@ -107,20 +106,17 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
             return torch.zeros_like(layer.weight)
 
     grads_abs = get_layer_metric_array(net, snip, mode)
-    
+
+    #print('number transferred: ', len(transferred), flush=True)
+
     if transfer_method:
         sum1 = 0.0
-        for i in range(len(grads_abs)):
-            sum1 += torch.sum(grads_abs[i])
-        sum1  = sum1.item()
+        #for i in range(len(grads_abs)):
+        #    sum1 += torch.sum(grads_abs[i])
+        #sum1  = sum1.item()
         start_store = time.time()
-        ''' 
+        #lids_store, sizes_store, timings_store = transfer_method.store(
         transfer_method.store(
-                              id=model_id,
-                              model=net,
-                              )
-        ''' 
-        slu = transfer_method.store(
                               id=model_id, 
                               model=net, 
                               name_hash=name_hash, 
@@ -128,13 +124,20 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
                               prefix=transferred, 
                               val_acc=sum1
                               )
+        
+        #all_lids.extend(lids_store)
+        #all_sizes.extend(sizes_store)
+        #all_timings.extend(timings_store)
         end_store = time.time()
-        timing_dict['stored'] = slu 
+        #timing_dict['stored'] = slu 
         timing_dict['store_time'] = end_store - start_store
 
     timing_dict['transfer_time'] = end_transfer - start_transfer
     timing_dict['train_time'] = end_store - total_start
-    print("store time: ", timing_dict['store_time'], flush=True)
-    print("transfer time: ", timing_dict['transfer_time'], flush=True)
+    print('store time: ', timing_dict['store_time'], flush=True)
+    print('transfer time: ', timing_dict['transfer_time'], flush=True)
+    #timing_dict['cache_logs'] = [all_timings, all_lids, all_sizes] 
+    #print("store time: ", timing_dict['store_time'], flush=True)
+    #print("transfer time: ", timing_dict['transfer_time'], flush=True)
 
     return grads_abs

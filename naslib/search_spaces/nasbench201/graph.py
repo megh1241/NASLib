@@ -86,13 +86,14 @@ class NasBench201SearchSpace(Graph):
         # 14-15, ..., 18-19: cells stage 3
         # 19-20:             post-processing
 
-        total_num_nodes = 20
+        total_num_nodes = 26
         self.add_nodes_from(range(1, total_num_nodes + 1))
         self.add_edges_from([(i, i + 1) for i in range(1, total_num_nodes)])
 
         #self.channels = [16, 32, 64]
-        #self.channels = [128, 256, 512]
-        self.channels = [512, 1024, 1024]
+        #self.channels = [256, 512, 512]
+        self.channels = [824, 824, 824]
+        #self.channels = [1400, 1400, 1400]
         #
         # operations at the edges
         #
@@ -102,25 +103,25 @@ class NasBench201SearchSpace(Graph):
                                             C_out=self.channels[0]))
 
         # stage 1
-        for i in range(2, 7):
+        for i in range(2, 9):
             self.edges[i, i + 1].set("op", cell.copy().set_scope("stage_1"))
 
         # stage 2
-        self.edges[7, 8].set(
+        self.edges[9, 10].set(
             "op", ResNetBasicblock(C_in=self.channels[0], C_out=self.channels[1], stride=2)
         )
-        for i in range(8, 13):
+        for i in range(10, 17):
             self.edges[i, i + 1].set("op", cell.copy().set_scope("stage_2"))
 
         # stage 3
-        self.edges[13, 14].set(
+        self.edges[17, 18].set(
             "op", ResNetBasicblock(C_in=self.channels[1], C_out=self.channels[2], stride=2)
         )
-        for i in range(14, 19):
+        for i in range(18, 25):
             self.edges[i, i + 1].set("op", cell.copy().set_scope("stage_3"))
 
         # post-processing
-        self.edges[19, 20].set(
+        self.edges[25, 26].set(
             "op",
             ops.Sequential(
                 nn.BatchNorm2d(self.channels[-1]),

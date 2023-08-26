@@ -10,6 +10,7 @@ import copy
 import torch
 import numpy as np
 import naslib
+import csv
 from fvcore.common.checkpoint import PeriodicCheckpointer
 
 from naslib.search_spaces.core.query_metrics import Metric
@@ -71,7 +72,7 @@ class Trainer(object):
         self.val_top1 = utils.AverageMeter()
         self.val_top5 = utils.AverageMeter()
         self.val_loss = utils.AverageMeter()
-
+        self.cache_dict = [[], [], []]
         n_parameters = 0
         #n_parameters = optimizer.get_model_size()
         # logger.info("param size = %fMB", n_parameters)
@@ -152,10 +153,13 @@ class Trainer(object):
             num_received = len(new_results)
             if num_received > 0:
                 self._population.extend(new_results)
-                
-                self._evaluator.dump_evals(
-                    saved_keys=self._saved_keys, timings_dict=new_results[0].result[1], log_dir=self._log_dir
-                )
+                #cache_dict_curr = new_results[0].result[1]['cache_logs']
+                #self.cache_dict[0].extend(cache_dict_curr[0])
+                #self.cache_dict[1].extend(cache_dict_curr[1])
+                #self.cache_dict[2].extend(cache_dict_curr[2])
+                #self._evaluator.dump_evals(
+                #    saved_keys=self._saved_keys, timings_dict=new_results[0].result[1], log_dir=self._log_dir
+                #)
                 num_evals_done += num_received
                 if num_evals_done >= self.epochs:
                     break
@@ -193,7 +197,6 @@ class Trainer(object):
                             raise Exception('Sorry the search space is not supported')
                         
                         child_cfg['parent'] = vals[2]
-
                         children_batch.append(child_cfg)
                     
                     # submit_childs
@@ -202,6 +205,20 @@ class Trainer(object):
                 else:  # If the population is too small keep increasing it
                     self._evaluator.submit(self._gen_random_batch(size=num_received))
 
+        '''
+        print('printing cache dict: ', self.cache_dict, flush=True)
+        if len(self.cache_dict[0]) > 0:
+            min_ele = min(self.cache_dict[0])
+            self.cache_dict[0] = [ele - min_ele for ele in self.cache_dict[0]]
+            min_ele = min(self.cache_dict[1])
+            self.cache_dict[1] = [ele - min_ele for ele in self.cache_dict[1]]
+            timings_to_store = zip(*self.cache_dict)
+            
+            with open('timing_results.csv','w') as out:
+                csv_out=csv.writer(out, delimiter=' ')
+                for row in timings_to_store:
+                    csv_out.writerow(row)
+        '''
         logger.info("Training finished")
 
     def evaluate_oneshot(self, resume_from="", dataloader=None):

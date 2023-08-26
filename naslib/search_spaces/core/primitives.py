@@ -254,6 +254,14 @@ class Zero(AbstractPrimitive):
         return "Zero (stride={})".format(self.stride)
 
 
+
+
+'''
+class AddByProjecting(AbstractPrimitive):
+    def __init__(self):
+        super().__init__(locals())
+''' 
+
 class Zero1x1(AbstractPrimitive):
     """
     Implementation of the zero operation. It removes

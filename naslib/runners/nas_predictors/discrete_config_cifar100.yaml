@@ -1,12 +1,12 @@
 seed: 0
 optimizer: re
 search_space: nasbench201
-dataset: cifar10
+dataset: cifar100 
 out_dir: run
 
 search:
   checkpoint_freq: 1000
-  epochs: 100
+  epochs: 50000
   fidelity: -1
 
   zc_names: snip
@@ -16,13 +16,11 @@ search:
   k: 10
 
   # RE
-  sample_size: 3
-  population_size: 5
-  #sample_size: 5
-  #population_size: 50
+  sample_size: 250
+  population_size: 2500
   
   # jacov data loader
-  batch_size: 16
+  batch_size: 256
   data_size: 25000
   cutout: False
   cutout_length: 16
@@ -31,5 +29,5 @@ search:
   
   # other params
   debug_predictor: False
-  #sample_size: 5
-  #population_size: 50
+  sample_size: 5
+  population_size: 50
