@@ -32,9 +32,15 @@ from naslib import utils
 from naslib.utils import setup_logger, get_dataset_api, get_zc_benchmark_api
 from naslib import utils
 import sys
-sys.path.insert(1, '/home/mmadhya1/experiments/')
-sys.path.insert(1, '/home/mmadhya1/experiments/cpp-store/')
-sys.path.insert(1, '/home/mmadhya1/')
+sys.path.insert(1, '/home/ubuntu/experiments/')
+sys.path.insert(1, '/home/ubuntu/experiments/cpp-store/')
+sys.path.insert(1, '/home/ubuntu/')
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+torch.backends.cudnn.enabled = False
+torch.cuda.is_available = lambda : False
+#sys.path.insert(1, '/home/mmadhya1/experiments/')
+#sys.path.insert(1, '/home/mmadhya1/experiments/cpp-store/')
+#sys.path.insert(1, '/home/mmadhya1/')
 import experiments.transfer_learning as tl
 import torch
 import time
@@ -282,6 +288,8 @@ def run_query_zc_method(config):
     elif search_space_str == 'nasbench301':
         model = NasBench301SearchSpace(n_classes=10)
         naslib.search_spaces.nasbench301.conversions.convert_compact_to_naslib(arch, model)
+    elif search_space_str == 'candleattn':
+        model = config['arch']
     else:
         raise Exception("Sorry, search space isn't supported") 
   
@@ -408,6 +416,8 @@ eval_method = eval_dict[eval_method_str]
 search_space = get_search_space(name=config.search_space, dataset=config.dataset)
 trainer = Trainer(config, log_dir=config.log_dir, lightweight_output=True)
 trainer.adapt_search_space(search_space, dataset_api=dataset_api)
+print('done 1', flush=True)
+'''
 time.sleep(10)
 if config.transfer_method == 'datastates':
     with Evaluator.create(
@@ -424,7 +434,7 @@ else:
         ) as evaluator:
         if evaluator is not None:
             trainer.search(evaluator, resume_from="")
-
+'''
 
 #print('all timings len: ', len(all_timings), flush=True)
 #print('all sizes len: ', len(all_sizes), flush=True)

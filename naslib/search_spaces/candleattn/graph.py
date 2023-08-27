@@ -1,3 +1,4 @@
+import collections
 import numpy as np
 import random
 import itertools
@@ -7,7 +8,7 @@ import torch.nn.functional as F
 import typing
 from typing import *
 
-from naslib.search_spaces.core import primitives as ops
+from naslib.search_spaces.candleattn import primitives as ops
 from naslib.search_spaces.core.graph import Graph
 from naslib.search_spaces.core.query_metrics import Metric
 from naslib.search_spaces.nasbench201.conversions import (
@@ -19,7 +20,6 @@ from naslib.search_spaces.nasbench201.conversions import (
 from naslib.search_spaces.nasbench201.encodings import encode_201, encode_adjacency_one_hot_op_indices
 from naslib.utils.encodings import EncodingType
 
-from .primitives import ResNetBasicblock
 
 NUM_EDGES = 6
 NUM_OPS = 5
@@ -44,17 +44,21 @@ class CandleAttnSearchSpace(Graph):
         # Cell definition
         #
 
+        
         self.name = "makrograph"
-        anchor_points = collections.deque([source], maxlen=3)
+        anchor_points = collections.deque([2], maxlen=3)
         # preprocessing
-        self.edges[1, 2].set("op", ops.Stem(C_in=self.in_channels,
-                                            C_out=self.channels[0]))
-        for i in range(2, total_num_nodes + 2):
+        self.add_node(1)
+        self.add_node(2)
+        self.add_edge(1, 2)
+        self.edges[1, 2].set("op",  ops._get_identity_op())
+        k = 3
+        for i in range(2, num_layers + 2):
             self.add_node(k)
             self.add_node(k+1)
             self.add_edge(k, k+1)
             #TODO: add dense
-            self.edges[k, k+1].data.set("op", ops._get_dense_ops([2000, 2001, 2002, 2003]))
+            self.edges[k, k+1].set("op", ops._get_dense_ops([2000, 2001, 2002, 2003]))
             self.add_node(k+2)
             self.add_edge(k+1, k+2)
             self.edges[k+1, k+2].set("op", ops._get_identity_op())

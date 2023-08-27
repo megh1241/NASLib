@@ -1,18 +1,19 @@
 import torch.nn as nn
+import os
+import torch
+from ..core.primitives import Zero, Identity
 
-#from ..core.primitives import AbstractPrimitive, ReLUConvBN
-from ..core.primitives import * 
+
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+torch.backends.cudnn.enabled = False
+torch.cuda.is_available = lambda : False
+
 
 def _get_dense_ops(sizes):
     ops = []
     for i in sizes:
         ops.append(nn.LazyLinear(i))
         
-
-def _get_constant_op():
-
-
-def _get_add_project_op():
 
 def _get_zero_op():
     return Zero()

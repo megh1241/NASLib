@@ -115,6 +115,7 @@ class Trainer(object):
                 cfg['arch_seq'] = naslib.search_spaces.nasbench201.conversions.convert_naslib_to_op_indices(model.arch)
             elif self.config.search_space == 'nasbench301':
                 cfg['arch'] = naslib.search_spaces.nasbench301.conversions.convert_naslib_to_compact(model.arch)
+            elif self.config.search_space == 'candleattn':
                 cfg['arch'] = model.arch
             batch.append(cfg)
         return batch
@@ -193,6 +194,10 @@ class Trainer(object):
                             child.arch.mutate(cfg['arch'], dataset_api=self.dataset_api)
                             child_cfg['arch'] = naslib.search_spaces.nasbench301.conversions.convert_naslib_to_compact(child.arch)
                             child_cfg['arch_seq'] = 'arch'
+                        elif self.config.search_space == 'candleattn':
+                            child.arch = self.search_space.clone()
+                            child.arch.mutate_with_parent_op_indices(cfg['arch'], dataset_api=self.dataset_api)
+                            child_cfg['arch'] = child.arch
                         else:
                             raise Exception('Sorry the search space is not supported')
                         

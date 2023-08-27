@@ -8,7 +8,7 @@ from .natsbenchsize.graph import NATSBenchSizeSearchSpace
 from .hierarchical.graph import HierarchicalSearchSpace
 from .transbench101.graph import TransBench101SearchSpaceMicro
 from .transbench101.graph import TransBench101SearchSpaceMacro
-
+from .candleattn.graph import CandleAttnSearchSpace
 from .transbench101.api import TransNASBenchAPI
 
 # FIXME Adapt to all search spaces
@@ -18,6 +18,7 @@ supported_search_spaces = {
     "nasbench301": NasBench301SearchSpace,
     'transbench101_micro': TransBench101SearchSpaceMicro,
     'transbench101_macro': TransBench101SearchSpaceMacro,
+    'candleattn': CandleAttnSearchSpace
 }
 
 dataset_n_classes = {
@@ -27,6 +28,7 @@ dataset_n_classes = {
     "svhn": 10,
     "ninapro": 18,
     "scifar100": 100,
+    "candleattn": 2
 }
 
 dataset_to_channels = {
@@ -36,6 +38,7 @@ dataset_to_channels = {
     "svhn": 3,
     "ninapro": 1,
     "scifar100": 3,
+    "candleattn": 1
 }
 
 def get_search_space(name, dataset):

@@ -1,12 +1,12 @@
 seed: 0
 optimizer: re
-search_space: nasbench201
-dataset: cifar10
+search_space: candleattn 
+dataset: candleattn
 out_dir: run
 
 search:
   checkpoint_freq: 1000
-  epochs: 100
+  epochs: 30
   fidelity: -1
 
   zc_names: snip

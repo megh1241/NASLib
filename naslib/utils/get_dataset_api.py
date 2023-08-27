@@ -210,6 +210,9 @@ def get_dataset_api(search_space=None, dataset=None):
 
     elif search_space == "test":
         return None
-
+    
+    elif search_space == "candleattn":
+        return None
+    
     else:
         raise NotImplementedError()

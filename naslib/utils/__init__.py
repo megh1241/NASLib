@@ -105,6 +105,10 @@ def default_argument_parser():
         type=str
     )
     parser.add_argument(
+        "--data_dir",
+        type=str
+    )
+    parser.add_argument(
         "--train_epochs",
         default=-1,
         type=int,
@@ -230,6 +234,7 @@ def get_config_from_args(args=None, config_type="nas"):
         config.model_path = args.model_path
         config.transfer_weights = args.transfer_weights
         config.eval_method_str = args.eval_method_str
+        config.data_dir = args.data_dir
         config.transfer_method = args.transfer_method
         config.log_dir = args.log_dir 
         config.train_epochs = args.train_epochs
