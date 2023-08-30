@@ -296,6 +296,7 @@ class Graph(torch.nn.Module, nx.DiGraph):
         Returns:
             int: Number of input nodes.
         """
+        print('num intput nodes; ', sum(self.in_degree(n) == 0 for n in self.nodes), flush=True)
         return sum(self.in_degree(n) == 0 for n in self.nodes)
 
     def _assign_x_to_nodes(self, x):
@@ -360,10 +361,12 @@ class Graph(torch.nn.Module, nx.DiGraph):
         
         # Assign x to the corresponding input nodes
         self._assign_x_to_nodes(x)
-
+        print('p1', flush=True)
         for node_idx in lexicographical_topological_sort(self):
+            print('p2', flush=True)
             node = self.nodes[node_idx]
-            logger.debug(
+            print('p3', flush=True)
+            print(
                 "Node {}-{}, current data {}, start processing...".format(
                     self.name, node_idx, log_formats(node)
                 )
@@ -401,7 +404,7 @@ class Graph(torch.nn.Module, nx.DiGraph):
                 # We have more than one output node. This is e.g. the case for
                 # auxillary losses. Attach them to the graph, handling must done
                 # by the user.
-                logger.debug(
+                print(
                     "Graph {} has more then one output node. Storing output of non-maximum index node {} at graph dict".format(
                         self, node_idx
                     )
@@ -415,12 +418,16 @@ class Graph(torch.nn.Module, nx.DiGraph):
                     if isinstance(edge_data.op, Graph):
                         edge_output = edge_data.op.forward(x)
                     elif isinstance(edge_data.op, AbstractPrimitive):
-                        logger.debug(
+                        print(
                             "Processing op {} at edge {}-{}".format(
                                 edge_data.op, node_idx, neigbor_idx
                             )
                         )
-
+                        #logger.debug(
+                        #    "Processing op {} at edge {}-{}".format(
+                        #        edge_data.op, node_idx, neigbor_idx
+                        #    )
+                        #)
                         edge_output = edge_data.op.forward(x, edge_data=edge_data)                        
                     else:
                         raise ValueError(
@@ -467,6 +474,7 @@ class Graph(torch.nn.Module, nx.DiGraph):
                         self.nodes[node_idx]["comb_op"],
                     )
             for neigbor_idx in self.neighbors(node_idx):
+                print('(', node_idx, ', ', neigbor_idx, ')', flush=True)
                 edge_data = self.get_edge_data(node_idx, neigbor_idx)
                 if isinstance(edge_data.op, Graph):
                     edge_data.op.parse()
@@ -663,15 +671,19 @@ class Graph(torch.nn.Module, nx.DiGraph):
                 graphs.append(node_data["subgraph"]._get_child_graphs())
 
         for _, _, edge_data in self.edges.data():
+            print('enter first for', flush=True)
             if isinstance(edge_data.op, Graph):
+                print('op is graph', flush=True)
                 graphs.append(edge_data.op)
                 graphs.append(edge_data.op._get_child_graphs())
             elif isinstance(edge_data.op, list):
+                print('op is list', flush=True)
                 for op in edge_data.op:
                     if isinstance(op, Graph):
                         graphs.append(op)
                         graphs.append(op._get_child_graphs())
             elif isinstance(edge_data.op, AbstractPrimitive):
+                print('op is abstractprimitive', flush=True)
                 # maybe it is an embedded op?
                 embedded_ops = edge_data.op.get_embedded_ops()
                 if embedded_ops is not None:
@@ -697,13 +709,17 @@ class Graph(torch.nn.Module, nx.DiGraph):
             else:
                 raise ValueError("Unknown format of op: {}".format(edge_data.op))
 
+        print('len of gr here first: ', len(graphs), flush=True)
         graphs = [g for g in iter_flatten(graphs)]
-
+        print('len of gr here: ', len(graphs), flush=True)
         if single_instances:
+            print('single inst',flush=True)
             single = []
             for g in graphs:
                 if g.name not in [sg.name for sg in single]:
+                    print('adding to single',flush=True)
                     single.append(g)
+            print('num single: ', len(single), flush=True)
             return sorted(single, key=lambda g: g.name)
         else:
             return sorted(graphs, key=lambda g: g.name)
@@ -831,7 +847,7 @@ class Graph(torch.nn.Module, nx.DiGraph):
             )
 
     def update_edges(
-        self, update_func: callable, scope="all", private_edge_data: bool = False
+            self, update_func: callable, edges_to_update: list=None, scope="all", private_edge_data: bool = False
     ):
         """
         This updates the edge data of this graph and all child graphs.
@@ -866,10 +882,18 @@ class Graph(torch.nn.Module, nx.DiGraph):
                 or (isinstance(scope, list) and graph.scope in scope)
             ):
                 logger.debug("Updating edges of graph {}".format(graph.name))
-                for u, v, edge_data in graph.edges.data():
-                    if not edge_data.is_final():
-                        edge = AttrDict(head=u, tail=v, data=edge_data)
-                        update_func(edge=edge)
+                if edges_to_update:
+                    for u, v, edge_data in graph.edges.data():
+                        if (u,v) in edges_to_update:
+                            if not edge_data.is_final():
+                                edge = AttrDict(head=u, tail=v, data=edge_data)
+                                update_func(edge=edge)
+                else:
+                    for u, v, edge_data in graph.edges.data():
+                        if not edge_data.is_final():
+                            edge = AttrDict(head=u, tail=v, data=edge_data)
+                            update_func(edge=edge)
+
         self._delete_flagged_edges()
 
     def update_nodes(

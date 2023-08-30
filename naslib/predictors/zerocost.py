@@ -26,8 +26,9 @@ class ZeroCost(Predictor):
 
     def query(self, graph, model_id=None, dataloader=None, info=None, transfer_method=None, name_hash=None, pred_graph=None, timing_dict = {}):
         loss_fn = graph.get_loss_fn()
-
+        print('in query 0', flush=True)
         n_classes = graph.num_classes
+        print('in query 1', flush=True)
         score = predictive.find_measures(
                 net_orig=graph,
                 dataloader=dataloader,
@@ -41,6 +42,7 @@ class ZeroCost(Predictor):
                 timing_dict=timing_dict,
                 model_id=model_id,
             )
+        print('in query 2', flush=True)
 
         if math.isnan(score) or math.isinf(score):
             score = -1e8

@@ -218,6 +218,8 @@ class Identity(AbstractPrimitive):
     def get_embedded_ops(self):
         return None
 
+    def get_op_name(self):
+        return "OpIdentity"
 
 class Zero(AbstractPrimitive):
     """
@@ -250,17 +252,13 @@ class Zero(AbstractPrimitive):
     def get_embedded_ops(self):
         return None
 
-    def __repr__(self):
-        return "Zero (stride={})".format(self.stride)
+    #def __repr__(self):
+    #    return "Zero (stride={})".format(self.stride)
+
+    def get_op_name(self):
+        return "OpZero"
 
 
-
-
-'''
-class AddByProjecting(AbstractPrimitive):
-    def __init__(self):
-        super().__init__(locals())
-''' 
 
 class Zero1x1(AbstractPrimitive):
     """

@@ -11,6 +11,7 @@ class CandleDataset(Dataset):
     def __init__(self, data_dir, subset='train', transform=None, target_transform=None):
         self.data_dir = data_dir
         self.transform = transform
+        self.target_transform = target_transform
         h5f = h5py.File(osp.join(self.data_dir,'training_attn.h5'), "r")
         X_key = 'X_'+subset
         y_key = 'Y_'+subset

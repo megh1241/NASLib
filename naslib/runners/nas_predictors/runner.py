@@ -25,6 +25,7 @@ from naslib.search_spaces import (
         NasBench201SearchSpace,
         NasBench301SearchSpace,
         NasBenchNLPSearchSpace,
+        CandleAttnSearchSpace
         )
 from naslib.search_spaces import get_search_space
 from naslib.search_spaces.nasbench201.conversions import *
@@ -50,7 +51,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import uuid
 import copy
 
-torch.set_default_device('cuda')
+#torch.set_default_device('cuda')
 if not MPI.Is_initialized():
     MPI.Init_thread()
 rank = MPI.COMM_WORLD.rank
@@ -59,9 +60,12 @@ size = MPI.COMM_WORLD.size
 
 def query_zc_scores(arch, model_id=0, pred_graph=None, name_hash=None, transfer_method=None, timing_dict={}):
     #transfer_method = None
+    print('in query_zc_scores 1', flush=True)
     zc_names = 'snip'
     zc = ZeroCost(method_type=zc_names)
+    print('in query_zc_scores 2', flush=True)
     arch_hash = arch.get_hash()
+    print('in query_zc_scores 3', flush=True)
     score = zc.query(arch,
             model_id=model_id,
             dataloader=train_queue, 
@@ -266,6 +270,7 @@ def run_query_method(config):
 
 
 def run_query_zc_method(config):
+    print('zc1', flush=True)
     arch = config['arch']
     if 'parent' in config:
         parent = config['parent']
@@ -276,6 +281,7 @@ def run_query_zc_method(config):
         #parent = filename.split('.')[0]
     else:
         parent = None
+    print('zc2', flush=True)
 
     if search_space_str == 'nasbench201':
         if dataset == 'cifar10':
@@ -289,13 +295,14 @@ def run_query_zc_method(config):
         model = NasBench301SearchSpace(n_classes=10)
         naslib.search_spaces.nasbench301.conversions.convert_compact_to_naslib(arch, model)
     elif search_space_str == 'candleattn':
-        model = config['arch']
-    else:
+        model = CandleAttnSearchSpace()
+        naslib.search_spaces.candleattn.conversions.convert_op_indices_to_naslib(arch, model)
+    else: 
         raise Exception("Sorry, search space isn't supported") 
-  
     Time = time.time()
     tint = int(str(Time)[-1:])
     
+    print('zc3', flush=True)
 
     rank = MPI.COMM_WORLD.rank
     random.seed(datetime.now().timestamp())
@@ -328,15 +335,22 @@ def run_query_zc_method(config):
         transfer_time = time2 - time1
         #print('transfer time: ', time2 - time1, flush=True)
     else:
+        print('zc4', flush=True)
         model.parse()
+        print('zc5', flush=True)
         digraph = model.flatten_and_parse()
+        print('zc6', flush=True)
         name_hash = get_hashed_names(digraph, model)
+        print('zc7', flush=True)
     
     pred_graph = process_pred_graph(name_hash, digraph)
+    print('zc8', flush=True)
     timing_dict1 = {}
-    model_size_val = model_size(model)
+    #model_size_val = model_size(model)
+    print('zc8.1', flush=True)
     #print('model_size: ', model_size_val, flush=True)
-    timing_dict1['model_size'] = model_size_val
+    timing_dict1['model_size'] = 1000 
+    print('zc9', flush=True)
     accuracy = query_zc_scores(
                             model,
                             model_id=model_id,
@@ -417,8 +431,7 @@ search_space = get_search_space(name=config.search_space, dataset=config.dataset
 trainer = Trainer(config, log_dir=config.log_dir, lightweight_output=True)
 trainer.adapt_search_space(search_space, dataset_api=dataset_api)
 print('done 1', flush=True)
-'''
-time.sleep(10)
+time.sleep(5)
 if config.transfer_method == 'datastates':
     with Evaluator.create(
         eval_method,
@@ -434,7 +447,6 @@ else:
         ) as evaluator:
         if evaluator is not None:
             trainer.search(evaluator, resume_from="")
-'''
 
 #print('all timings len: ', len(all_timings), flush=True)
 #print('all sizes len: ', len(all_sizes), flush=True)

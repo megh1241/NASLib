@@ -11,13 +11,7 @@ from typing import *
 from naslib.search_spaces.candleattn import primitives as ops
 from naslib.search_spaces.core.graph import Graph
 from naslib.search_spaces.core.query_metrics import Metric
-from naslib.search_spaces.nasbench201.conversions import (
-    convert_op_indices_to_naslib,
-    convert_naslib_to_op_indices,
-    convert_naslib_to_str,
-    convert_op_indices_to_str,
-)
-from naslib.search_spaces.nasbench201.encodings import encode_201, encode_adjacency_one_hot_op_indices
+from naslib.search_spaces.candleattn.conversions import * 
 from naslib.utils.encodings import EncodingType
 
 
@@ -34,46 +28,108 @@ class CandleAttnSearchSpace(Graph):
     def __init__(self, n_classes=2, num_layers=10, rel_size='large'):
         super().__init__()
         self.num_classes = n_classes
+        self.op_indices = None
         self.rel_size = rel_size
         self.num_layers = num_layers
         self.space_name = "candleattn"
         self.instantiate_model = True
         self.sample_without_replacement = False
-
+        self.v_edges = []
+        self.op_names = []
         #
         # Cell definition
         #
-
-        
         self.name = "makrograph"
-        anchor_points = collections.deque([2], maxlen=3)
         # preprocessing
         self.add_node(1)
         self.add_node(2)
         self.add_edge(1, 2)
         self.edges[1, 2].set("op",  ops._get_identity_op())
         k = 3
+        dense_op_list = []
+        skip_op_list = []
+        op_names_skip = [ops.get_zero_op_names(), ops.get_identity_op_names()]
+        op_names_dense = ops.get_dense_op_names([6212, 2001, 2002, 2003])
+        self.add_node(3)
+        self.add_node(4)
+        self.add_edge(2, 3)
+        self.add_edge(3, 4)
+        self.v_edges.append((2,3))
+        self.op_names.append([i for i in op_names_dense])
+        self.v_edges.append((3,4))
+        self.op_names.append([i for i in op_names_skip])
+        dense_op_list = [(2,3)]
+        skip_op_list = [(3,4)]
+        self._set_cell_ops(dense_op_list, skip_op_list)
+    
+        '''
+        #anchor_points = collections.deque([2], maxlen=3)
         for i in range(2, num_layers + 2):
+            print('***********************************************', flush=True)
+            print('i: ', i, flush=True)
             self.add_node(k)
             self.add_node(k+1)
             self.add_edge(k, k+1)
+            print('point 1', flush=True)
             #TODO: add dense
-            self.edges[k, k+1].set("op", ops._get_dense_ops([2000, 2001, 2002, 2003]))
+            #self.edges[k, k+1].set("op", ops._get_dense_ops([2000, 2001, 2002, 2003]))
+            dense_op_list.append((k, k+1))  
+            self.v_edges.append((k, k+1))
+            self.op_names.append(op_names_dense)
             self.add_node(k+2)
             self.add_edge(k+1, k+2)
-            self.edges[k+1, k+2].set("op", ops._get_identity_op())
+            #self.edges[k+1, k+2].set("op", ops._get_identity_op())
+            print('point 2', flush=True)
             k+=3
             old_k = k-1
             for anchor in anchor_points:
+                print('inside anchor start it', flush=True)
                 self.add_node(k)
                 self.add_edge(k-1, k)
-                self.edges[k-1, k].set("op", [ops._get_zero_op(), ops._get_identity_op()]) 
-                self.add_edge(k, old_k-1)             
+                #self.edges[k-1, k].set("op", [ops._get_zero_op(), ops._get_identity_op()]) 
+                skip_op_list.append(( old_k, k))  
+                self.v_edges.append((old_k, k))
+                self.add_edge(old_k, k)
+                self.op_names.append(op_names_skip)
+                #self.edges[old_k, k].set("op", ops._get_identity_op()) 
+                k+=1
+                print('inside anchor done it', flush=True)
+            print('point 3', flush=True)
             prev_input = old_k-1
             anchor_points.append(prev_input)
+        self.add_edge(2,3)
+        #self.edges[2,3].set("op", ops._get_identity_op())
+        self._set_cell_ops(dense_op_list, skip_op_list)
+        '''
 
+    def get_all_op_names(self):
+        return self.op_names
+        
+    def get_all_v_edges(self):
+        return self.v_edges
     
+    def _set_cell_ops(self, dense_op_list, skip_op_list) -> None:
+        self.update_edges(
+            update_func = lambda edge:self._set_dense_ops(edge),
+            edges_to_update = dense_op_list,
+            private_edge_data=True
+        )
+        self.update_edges(
+            update_func = lambda edge:self._set_skip_ops(edge),
+            edges_to_update = skip_op_list,
+            private_edge_data=True
+        )
 
+    def _set_dense_ops(self, edge) -> None:
+        edge.data.set(
+            "op", ops._get_dense_ops([6212, 2001, 2002, 2003])
+            )
+    
+    def _set_skip_ops(self, edge) -> None:
+        edge.data.set(
+            "op", [ops._get_zero_op(), ops._get_identity_op()]
+            )
+    
     def get_op_indices(self) -> list:
         if self.op_indices is None:
             self.op_indices = convert_naslib_to_op_indices(self)
@@ -82,10 +138,13 @@ class CandleAttnSearchSpace(Graph):
     def get_hash(self) -> tuple:
         return tuple(self.get_op_indices())
 
-    def get_arch_iterator(self, dataset_api=None) -> Iterator:
-        return itertools.product(range(NUM_OPS), repeat=NUM_EDGES)
+    #def get_arch_iterator(self, dataset_api=None) -> Iterator:
+    #    return itertools.product(range(NUM_OPS), repeat=NUM_EDGES)
 
     def set_op_indices(self, op_indices: list) -> None:
+        if self.instantiate_model == True:
+            assert self.op_indices is None, f"An architecture has already been assigned to this instance of {self.__class__.__name__}. Instantiate a new instance to be able to sample a new model or set a new architecture."
+        convert_op_indices_to_naslib(op_indices, self)
         self.op_indices = op_indices
 
     def set_spec(self, op_indices: list, dataset_api=None) -> None:
@@ -108,20 +167,17 @@ class CandleAttnSearchSpace(Graph):
         """
 
         if load_labeled == True:
+            print('SHOULD NOT be here (sampling labelled arch)!', flush=True)
             return self.sample_random_labeled_architecture()
 
-        def is_valid_arch(op_indices: list) -> bool:
-            return not ((op_indices[0] == op_indices[1] == op_indices[2] == 1) or
-                        (op_indices[2] == op_indices[4] == op_indices[5] == 1))
 
-        while True:
-            op_indices = np.random.randint(NUM_OPS, size=(NUM_EDGES)).tolist()
+        op_indices = []
+        for i in range(len(self.v_edges)):
+            rand_num = np.random.randint(len(self.op_names[i]))
+            op_indices.append(rand_num)
 
-            if not is_valid_arch(op_indices):
-                continue
-
-            self.set_op_indices(op_indices)
-            break
+        #op_indices = np.random.randint(NUM_OPS, size=(NUM_EDGES)).tolist()
+        self.set_op_indices(op_indices)
         self.compact = self.get_op_indices()
 
     def mutate(self, parent: Graph, dataset_api: dict = None) -> None:
@@ -133,7 +189,8 @@ class CandleAttnSearchSpace(Graph):
         op_indices = list(parent_op_indices)
 
         edge = np.random.choice(len(parent_op_indices))
-        available = [o for o in range(len(OP_NAMES)) if o != parent_op_indices[edge]]
+        available = [o for o in self.op_names[edge] if o != parent_op_indices[edge]]
+        #available = [o for o in range(len(OP_NAMES)) if o != parent_op_indices[edge]]
         op_index = np.random.choice(available)
         op_indices[edge] = op_index
         self.set_op_indices(op_indices)
@@ -144,9 +201,9 @@ class CandleAttnSearchSpace(Graph):
         update the naslib object and op_indices
         """
         op_indices = list(parent_op_indices)
-
         edge = np.random.choice(len(parent_op_indices))
-        available = [o for o in range(len(OP_NAMES)) if o != parent_op_indices[edge]]
+        available = [idx for idx, o in enumerate(self.op_names[edge]) if o != parent_op_indices[edge]]
+        #available = [o for o in range(len(OP_NAMES)) if o != parent_op_indices[edge]]
         op_index = np.random.choice(available)
         op_indices[edge] = op_index
         self.set_op_indices(op_indices)

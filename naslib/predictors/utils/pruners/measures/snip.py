@@ -45,7 +45,12 @@ def snip_forward_linear(self, x):
 
 @measure("snip", bn=True, mode="param")
 def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,split_data=1, pred_graph=None, name_hash=None, transfer_method=None, timing_dict={}):
+    print('emter snip function', flush=True)
+    #inputs = torch.transpose(inputs, 0,1)
     total_start = time.time()
+    targets = torch.argmax(targets, dim=1)
+    print('target shape: ', targets.shape, flush=True) 
+    print(targets, flush=True)
     #model_id = int(uuid.uuid4().int>>64)
     #print('model id: ', model_id, flush=True)
     
@@ -55,12 +60,16 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
     #)
     #end_transfer = time.time()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print('input shape: ', inputs.shape[0], flush=True)
+    net(torch.rand(inputs.shape))
+    print('emter snip function 1', flush=True)
     #print(device, flush=True)
     inputs, targets = inputs.to(device), targets.to(device)
+    print('emter snip function 2', flush=True)
     for layer in net.modules():
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
             layer.weight_mask = nn.Parameter(torch.ones_like(layer.weight))
-            layer.weight.requires_grad = False
+            #layer.weight.requires_grad = False
 
         # Override the forward methods:
         if isinstance(layer, nn.Conv2d):
@@ -69,6 +78,7 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
         if isinstance(layer, nn.Linear):
             layer.forward = types.MethodType(snip_forward_linear, layer)
 
+    print('emter snip function 3', flush=True)
     # Compute gradients (but don't apply them)
     net.zero_grad()
     N = inputs.shape[0]
@@ -79,9 +89,9 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
     all_timings = []
     if transfer_method:
         #transferred, parent_id, lids, sizes, timings = transfer_method.transfer(
-        transferred, parent_id = transfer_method.transfer(
-            net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
-        )
+        #transferred, parent_id = transfer_method.transfer(
+        #    net, id=model_id, name_hash=name_hash, pred_graph=pred_graph, hint=None
+        #)
         timing_dict['transferred'] = 0 
         
         #if len(lids) > 0:
@@ -90,13 +100,18 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
         #    all_timings.extend(timings)
 
     end_transfer = time.time()
+    print('emter snip function 4', flush=True)
     for sp in range(split_data):
         st = sp * N // split_data
         en = (sp + 1) * N // split_data
 
+        print('emter snip function 4.1', flush=True)
         outputs = net.forward(inputs[st:en])
+        print('emter snip function 4.2', flush=True)
         loss = loss_fn(outputs, targets[st:en])
+        print('emter snip function 4.3', flush=True)
         loss.backward()
+        print('emter snip function 4.4', flush=True)
 
     # select the gradients that we want to use for search/prune
     def snip(layer):
@@ -105,7 +120,9 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
         else:
             return torch.zeros_like(layer.weight)
 
+    print('emter snip function 5.0', flush=True)
     grads_abs = get_layer_metric_array(net, snip, mode)
+    print('emter snip function 5', flush=True)
 
     #print('number transferred: ', len(transferred), flush=True)
 
@@ -116,14 +133,14 @@ def compute_snip_per_weight(net, inputs, targets, mode, loss_fn, model_id=None,s
         #sum1  = sum1.item()
         start_store = time.time()
         #lids_store, sizes_store, timings_store = transfer_method.store(
-        transfer_method.store(
-                              id=model_id, 
-                              model=net, 
-                              name_hash=name_hash, 
-                              pred_graph=pred_graph, 
-                              prefix=transferred, 
-                              val_acc=sum1
-                              )
+        #transfer_method.store(
+        #                      id=model_id, 
+        #                      model=net, 
+        #                      name_hash=name_hash, 
+        #                      pred_graph=pred_graph, 
+        #                      prefix=transferred, 
+        #                      val_acc=sum1
+        #                      )
         
         #all_lids.extend(lids_store)
         #all_sizes.extend(sizes_store)

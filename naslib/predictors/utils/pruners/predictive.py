@@ -50,20 +50,25 @@ def find_measures_arrays(
     pred_graph=None,
     timing_dict={}
 ):
+    print('in find_measures_array 1', flush=True)
     if measure_names is None:
         measure_names = measures.available_measures
+    print('in find_measures_array 2', flush=True)
 
     dataload, num_imgs_or_batches, num_classes = dataload_info
+    print('in find_measures_array 3', flush=True)
 
     if not hasattr(net_orig, "get_prunable_copy"):
         net_orig.get_prunable_copy = types.MethodType(copynet, net_orig)
 
+    print('in find_measures_array 4', flush=True)
     # move to cpu to free up mem
-    torch.cuda.empty_cache()
+    #torch.cuda.empty_cache()
     net_orig = net_orig.cpu()
-    torch.cuda.empty_cache()
+    #torch.cuda.empty_cache()
 
     # given 1 minibatch of data
+    print('in find_measures_array 5', flush=True)
     if dataload == "random":
         inputs, targets = get_some_data(
             trainloader, num_batches=num_imgs_or_batches, device=device
@@ -112,7 +117,7 @@ def find_measures_arrays(
                 ds += 1
                 while inputs.shape[0] % ds != 0:
                     ds += 1
-                torch.cuda.empty_cache()
+                #torch.cuda.empty_cache()
                 print(f"Caught CUDA OOM, retrying with data split into {ds} parts")
             else:
                 raise e

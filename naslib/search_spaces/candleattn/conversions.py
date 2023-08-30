@@ -16,29 +16,34 @@ import torch
 
 from naslib.search_spaces.core.primitives import AbstractPrimitive
 
-OP_NAMES = ["Identity", "Zero", "ReLUConvBN3x3", "ReLUConvBN1x1", "AvgPool1x1"]
-OP_NAMES_NB201 = ['skip_connect', 'none', 'nor_conv_3x3', 'nor_conv_1x1', 'avg_pool_3x3']
+#OP_NAMES = ["Identity", "Zero", "ReLUConvBN3x3", "ReLUConvBN1x1", "AvgPool1x1"]
+#OP_NAMES_NB201 = ['skip_connect', 'none', 'nor_conv_3x3', 'nor_conv_1x1', 'avg_pool_3x3']
 
-EDGE_LIST = ((1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4))
-OPS_TO_NB201 = {
-    "AvgPool1x1": "avg_pool_3x3",
-    "ReLUConvBN1x1": "nor_conv_1x1",
-    "ReLUConvBN3x3": "nor_conv_3x3",
-    "Identity": "skip_connect",
-    "Zero": "none",
-}
+#EDGE_LIST = ((1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4))
+#OPS_TO_NB201 = {
+#    "AvgPool1x1": "avg_pool_3x3",
+#    "ReLUConvBN1x1": "nor_conv_1x1",
+#    "ReLUConvBN3x3": "nor_conv_3x3",
+#    "Identity": "skip_connect",
+#    "Zero": "none",
+#}
 
 
 def convert_naslib_to_op_indices(naslib_object):
-    cell = naslib_object._get_child_graphs(single_instances=True)[0]
+    #child_graphs = naslib_object._get_child_graphs(single_instances=True)
+    #print('child_graphs: ', child_graphs, flush=True)
+    #cell = child_graphs[0]
+    edge_list = naslib_object.get_all_v_edges()
+    op_names = naslib_object.get_all_op_names()
     ops = []
-    for i, j in EDGE_LIST:
-        ops.append(cell.edges[i, j]["op"].get_op_name)
+    for i, j in edge_list:
+        ops.append(naslib_object.edges[i, j]["op"].get_op_name())
+        #ops.append(cell.edges[i, j]["op"].get_op_name())
 
-    return [OP_NAMES.index(name) for name in ops]
+    return [op_names[name_iter].index(name) for name_iter, name in enumerate(ops)]
 
 
-def convert_op_indices_to_naslib(op_indices, naslib_object):
+def convert_op_indices_to_naslib(op_indices, naslib_object ):
     """
     Converts op indices to a naslib object
     input: op_indices (list of six ints)
@@ -52,27 +57,42 @@ def convert_op_indices_to_naslib(op_indices, naslib_object):
     warning: this method will modify the edges in naslib_object.
     """
 
+    edge_list = naslib_object.get_all_v_edges()
+    op_names = naslib_object.get_all_op_names()
+    print('all edge list: ', edge_list, flush=True)
+    print('all op names: ', op_names, flush=True)
     # create a dictionary of edges to ops
     edge_op_dict = {}
     for i, index in enumerate(op_indices):
-        edge_op_dict[EDGE_LIST[i]] = OP_NAMES[index]
+        print('edge_list[i]: ', edge_list[i], flush=True)
+        print('index: ', index, flush=True)
+        edge_op_dict[edge_list[i]] = op_names[i][index]
 
     def add_op_index(edge):
         # function that adds the op index from the dictionary to each edge
         if (edge.head, edge.tail) in edge_op_dict:
+            flag=0
             for i, op in enumerate(edge.data.op):
-                if op.get_op_name == edge_op_dict[(edge.head, edge.tail)]:
+                print('op name: ', op.get_op_name(), flush=True)
+                print('edge name: ', edge_op_dict[(edge.head, edge.tail)], flush=True)
+                if op.get_op_name() == edge_op_dict[(edge.head, edge.tail)]:
+                    flag = 1
                     index = i
                     break
-            edge.data.set("op_index", index, shared=True)
+            if flag == 1:
+                edge.data.set("op_index", index, shared=True)
 
     def update_ops(edge):
         # function that replaces the primitive ops at the edges with the one in op_index
+        print('edge.data: ', edge.data, flush=True)
+        print('edge.head: ', edge.head, flush=True)
+        print('edge.tail: ', edge.tail, flush=True)
         if isinstance(edge.data.op, list):
             primitives = edge.data.op
         else:
             primitives = edge.data.primitives
 
+        print('primitives: ', primitives, flush=True)
         chosen_op = primitives[edge.data.op_index]
         primitives[edge.data.op_index] = update_batchnorms(chosen_op)
 
@@ -101,57 +121,9 @@ def convert_op_indices_to_naslib(op_indices, naslib_object):
         return new_op
 
     naslib_object.update_edges(
-        add_op_index, scope=naslib_object.OPTIMIZER_SCOPE, private_edge_data=False
+        add_op_index, edges_to_update=edge_list ,private_edge_data=False
     )
 
     naslib_object.update_edges(
-        update_ops, scope=naslib_object.OPTIMIZER_SCOPE, private_edge_data=True
+        update_ops, edges_to_update=edge_list,private_edge_data=True
     )
-
-
-def convert_naslib_to_str(naslib_object):
-    """
-    Converts naslib object to string representation.
-    """
-
-    cell = naslib_object.edges[2, 3].op
-    edge_op_dict = {
-        (i, j): OPS_TO_NB201[cell.edges[i, j]["op"].get_op_name] for i, j in cell.edges
-    }
-    op_edge_list = [
-        "{}~{}".format(edge_op_dict[(i, j)], i - 1)
-        for i, j in sorted(edge_op_dict, key=lambda x: x[1])
-    ]
-
-    return "|{}|+|{}|{}|+|{}|{}|{}|".format(*op_edge_list)
-
-
-def convert_str_to_op_indices(str_encoding):
-    """
-    Converts NB201 string representation to op_indices
-    """
-    nodes = str_encoding.split('+')
-
-    def get_op(x):
-        return x.split('~')[0]
-
-    node_ops = [list(map(get_op, n.strip()[1:-1].split('|'))) for n in nodes]
-
-    enc = []
-    for u, v in EDGE_LIST:
-        enc.append(OP_NAMES_NB201.index(node_ops[v - 2][u - 1]))
-
-    return tuple(enc)
-
-
-def convert_op_indices_to_str(op_indices):
-    edge_op_dict = {
-        edge: OP_NAMES_NB201[op] for edge, op in zip(EDGE_LIST, op_indices)
-    }
-
-    op_edge_list = [
-        "{}~{}".format(edge_op_dict[(i, j)], i - 1)
-        for i, j in sorted(edge_op_dict, key=lambda x: x[1])
-    ]
-
-    return "|{}|+|{}|{}|+|{}|{}|{}|".format(*op_edge_list)
